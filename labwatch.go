@@ -11,8 +11,16 @@ import (
 
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/talos"
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"gopkg.in/yaml.v3"
+)
+
+var (
+	Version  = "testing"
+	logLevel = kingpin.Flag("log-level", "Log Level (one of debug|info|warn|error)").Short('l').Envar("LABWATCH_LOGLEVEL").String()
+	config   = kingpin.Flag("config", "Configuration file path").Short('c').Envar("LABWATCH_CONFIG").ExistingFile()
 )
 
 type LabwatchConfig struct {
@@ -32,16 +40,43 @@ var eventClients = map[string]chan<- loki.LogEvent{}
 var lock = &sync.Mutex{}
 
 func main() {
-	lvl := slog.LevelVar{}
-	lvl.Set(slog.LevelDebug)
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil)).With("operation", "main")
-	log.Info("starting up labwatch")
+	kingpin.Version(Version)
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
+
+	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
+	switch *logLevel {
+	case "error":
+		opts.Level = slog.LevelError
+	case "warn":
+		opts.Level = slog.LevelWarn
+	case "info":
+		opts.Level = slog.LevelInfo
+	case "debug":
+		opts.Level = slog.LevelDebug
+	}
+
+	log := slog.New(slog.NewTextHandler(os.Stdout, opts)).With("operation", "main")
+	log.Info("starting up labwatch", "version", Version)
 
 	cfg := LabwatchConfig{
 		LokiAddress:      "boss.local:3100",
 		LokiQuery:        `{ host_name =~ ".+" } | json`,
 		TalosConfigFile:  "/home/boss/talos/talosconfig",
 		TalosClusterName: "koobs",
+	}
+
+	if *config != "" {
+		d, err := os.ReadFile(*config)
+		if err != nil {
+			log.Error("failed to read provided config file", "error", err.Error())
+			os.Exit(1)
+		}
+		err = yaml.Unmarshal(d, &cfg)
+		if err != nil {
+			log.Error("failed to parse provided config file", "error", err.Error())
+			os.Exit(1)
+		}
 	}
 
 	err := startWatchers(cfg, log)
@@ -127,8 +162,8 @@ func main() {
 		http.ServeFile(w, r, "websockets.html")
 	})
 
-	http.ListenAndServe(":8080", nil)
-	log.With("operation", "main").Info("shutting down")
+	err = http.ListenAndServe(":8080", nil)
+	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
 func startWatchers(cfg LabwatchConfig, log *slog.Logger) error {
