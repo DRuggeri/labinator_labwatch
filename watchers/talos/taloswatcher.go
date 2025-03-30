@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/siderolabs/gen/xslices"
@@ -27,15 +28,17 @@ type TalosWatcher struct {
 	talosContext *tcconfig.Context
 	watchers     map[string]NodeWatcher
 	internalChan chan NodeStatus
+	log          *slog.Logger
 }
 
 type NodeWatcher struct {
 	CurrentStatus NodeStatus
 	configOpts    []tclient.OptionFunc
+	log           *slog.Logger
 }
 
 type NodeStatus struct {
-	WatcherState    string
+	WatcherState    ConnectionState
 	Node            string
 	Phase           map[string]string
 	Tasks           map[string]string
@@ -61,12 +64,18 @@ const HEALTH_UNKNOWN HealthState = "unknown"
 const HEALTH_OK HealthState = "healthy"
 const HEALTH_ERR HealthState = "unhealthy"
 
+type ConnectionState string
+
+const CONNECTION_OK ConnectionState = "connected"
+const CONNECTION_DISCONNECTED ConnectionState = "disconnected"
+
 // func NewTalosWatcher(configFile string, clusterName string) (watchers.Watcher, error) {
-func NewTalosWatcher(ctx context.Context, configFile string, clusterName string) (*TalosWatcher, error) {
+func NewTalosWatcher(ctx context.Context, configFile string, clusterName string, log *slog.Logger) (*TalosWatcher, error) {
 	w := &TalosWatcher{
 		Status:       map[string]NodeStatus{},
 		watchers:     map[string]NodeWatcher{},
 		internalChan: make(chan NodeStatus),
+		log:          log.With("operation", "TalosWatcher"),
 	}
 
 	cfg, err := tcconfig.Open(configFile)
@@ -99,7 +108,7 @@ func NewTalosWatcher(ctx context.Context, configFile string, clusterName string)
 
 		nodeWatcher := NodeWatcher{
 			CurrentStatus: NodeStatus{
-				WatcherState:    "disconnected",
+				WatcherState:    CONNECTION_DISCONNECTED,
 				Node:            nodeName,
 				Phase:           map[string]string{},
 				Tasks:           map[string]string{},
@@ -119,6 +128,7 @@ func NewTalosWatcher(ctx context.Context, configFile string, clusterName string)
 					},
 				)),
 			},
+			log: log.With("operation", "NodeWatcher", "node", nodeName),
 		}
 		go nodeWatcher.Watch(ctx, w.internalChan)
 		w.watchers[nodeName] = nodeWatcher
@@ -223,30 +233,31 @@ func (w NodeWatcher) Watch(controlContext context.Context, resultChan chan<- Nod
 		} else {
 			go func() {
 				conn := nodeClient.Conn()
+				newState := CONNECTION_DISCONNECTED
 				conn.WaitForStateChange(controlContext, conn.GetState())
 				for {
 					bail := false
 					connState := conn.GetState()
 					switch connState {
 					case connectivity.Connecting:
-						w.CurrentStatus.WatcherState = "connecting"
 					case connectivity.Ready:
-						w.CurrentStatus.WatcherState = "ready"
+						w.CurrentStatus.WatcherState = CONNECTION_OK
 					case connectivity.Idle:
-						w.CurrentStatus.WatcherState = "idle"
 						bail = true
 					case connectivity.TransientFailure:
-						w.CurrentStatus.WatcherState = "failed"
 						bail = true
 					case connectivity.Shutdown:
-						w.CurrentStatus.WatcherState = "shutdown"
 						bail = true
 					default:
-						w.CurrentStatus.WatcherState = "unknown"
 						bail = true
 					}
 
-					resultChan <- w.CurrentStatus
+					if w.CurrentStatus.WatcherState != newState {
+						w.log.Debug("detected state change", "old", w.CurrentStatus.WatcherState, "new", newState)
+						w.CurrentStatus.WatcherState = newState
+						resultChan <- w.CurrentStatus
+					}
+
 					if bail {
 						killWatch()
 						return

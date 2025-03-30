@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -11,7 +13,11 @@ import (
 )
 
 func main() {
-	w, err := talos.NewTalosWatcher(context.Background(), "/root/talos/talosconfig", "koobs")
+	lvl := slog.LevelVar{}
+	lvl.Set(slog.LevelDebug)
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	w, err := talos.NewTalosWatcher(context.Background(), "/home/boss/talos/talosconfig", "koobs", log)
 	if err != nil {
 		panic(err)
 	}
