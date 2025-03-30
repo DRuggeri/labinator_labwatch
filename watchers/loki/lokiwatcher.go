@@ -43,6 +43,12 @@ type LogStats struct {
 	NumDNSCached     int
 
 	NumCertChecks int
+	NumCertSigned int
+
+	NumFirewallWanInDrops  int
+	NumFirewallWanOutDrops int
+	NumFirewallLanInDrops  int
+	NumFirewallLanOutDrops int
 }
 
 type LokiWatcherConfig struct {
@@ -241,9 +247,21 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 			} else if strings.HasPrefix(e.Message, "cached") {
 				w.stats.NumDNSCached++
 			}
-		}
-		if strings.HasPrefix(e.Message, "Starting cert-renewer") {
+		} else if e.Node == "wally" && e.Service == "kernel" {
+			if strings.Contains(e.Message, "drop wan in") {
+				w.stats.NumFirewallWanInDrops++
+			} else if strings.Contains(e.Message, "drop wan out") {
+				w.stats.NumFirewallWanOutDrops++
+			} else if strings.Contains(e.Message, "drop lan in") {
+				w.stats.NumFirewallLanInDrops++
+			} else if strings.Contains(e.Message, "drop lan out") {
+				w.stats.NumFirewallLanOutDrops++
+			}
+		} else if strings.HasPrefix(e.Message, "Starting cert-renewer") {
 			w.stats.NumCertChecks++
+
+		} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/sign") && strings.Contains(e.Message, "status=201") {
+			w.stats.NumCertSigned++
 		}
 	}
 }
