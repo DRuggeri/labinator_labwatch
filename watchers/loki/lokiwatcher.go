@@ -43,6 +43,7 @@ type LogStats struct {
 	NumDNSCached     int
 
 	NumCertChecks int
+	NumCertOK     int
 	NumCertSigned int
 
 	NumFirewallWanInDrops  int
@@ -247,6 +248,7 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 			} else if strings.HasPrefix(e.Message, "cached") {
 				w.stats.NumDNSCached++
 			}
+
 		} else if e.Node == "wally" && e.Service == "kernel" {
 			if strings.Contains(e.Message, "drop wan in") {
 				w.stats.NumFirewallWanInDrops++
@@ -257,9 +259,11 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 			} else if strings.Contains(e.Message, "drop lan out") {
 				w.stats.NumFirewallLanOutDrops++
 			}
+
 		} else if strings.HasPrefix(e.Message, "Starting cert-renewer") {
 			w.stats.NumCertChecks++
-
+		} else if e.Message == "certificate does not need renewal" {
+			w.stats.NumCertOK++
 		} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/sign") && strings.Contains(e.Message, "status=201") {
 			w.stats.NumCertSigned++
 		}
