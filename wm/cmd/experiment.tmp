@@ -1,0 +1,80 @@
+package main
+
+import (
+	"encoding/binary"
+	"fmt"
+
+	"github.com/shyrobbiani/x-go-binding/xgb"
+)
+
+// SEE: https://stackoverflow.com/questions/252906/how-to-get-the-list-of-open-windows-from-xserver
+
+type NewestWindow struct {
+	id   xgb.Id
+	name string
+}
+
+var newest NewestWindow
+
+func main() {
+	fmt.Println("Started")
+	conn, err := xgb.Dial("")
+	if err != nil {
+		panic(err)
+	}
+	root := conn.DefaultScreen().Root
+
+	windowProps, err := getProperty(conn, root, "_NET_CLIENT_LIST")
+	if err != nil {
+		panic(err)
+	}
+
+	vals := toInts(int(windowProps.Format), windowProps.Value)
+
+	for i, windowId := range vals {
+		id := xgb.Id(windowId)
+		fmt.Printf("window %d - %v:\n", i, windowId)
+		res, _ := getProperty(conn, id, "_NET_WM_NAME")
+		newest = NewestWindow{id: id, name: string(res.Value)}
+	}
+
+	fmt.Printf("NewestWindow - id: 0x0%x name: %s\n", newest.id, newest.name)
+}
+
+func getProperty(conn *xgb.Conn, id xgb.Id, name string) (*xgb.GetPropertyReply, error) {
+	props, err := conn.ListProperties(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var atomOfInterest xgb.Id
+	for _, atom := range props.Atoms {
+		nameReply, err := conn.GetAtomName(atom)
+		if err != nil {
+			return nil, err
+		}
+		propName := string(nameReply.Name)
+		if name == propName {
+			atomOfInterest = atom
+		}
+	}
+
+	return conn.GetProperty(false, id, atomOfInterest, xgb.AtomAny, 0, 99999)
+}
+
+func toInts(size int, vals []byte) []int {
+	res := []int{}
+
+	if size == 32 {
+		if len(vals)%4 != 0 {
+			panic(fmt.Sprintf("bad values passed? Have %d, but need evenly divisible by 4", len(vals)))
+		}
+		var part []byte
+		for i := 0; i < len(vals); i += 4 {
+			part = vals[i : i+4]
+			res = append(res, int(binary.LittleEndian.Uint32(part)))
+		}
+
+	}
+	return res
+}
