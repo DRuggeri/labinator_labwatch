@@ -15,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v3"
+
+	_ "net/http/pprof"
 )
 
 var (

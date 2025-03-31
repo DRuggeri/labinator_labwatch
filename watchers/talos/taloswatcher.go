@@ -169,6 +169,8 @@ func (w *TalosWatcher) Watch(controlContext context.Context, resultChan chan<- m
 }
 
 func (w NodeWatcher) Watch(controlContext context.Context, resultChan chan<- NodeStatus) {
+	log := w.log.With("operation", "TalosWatcher.Watch")
+	log.Debug("watching")
 	resultChan <- w.CurrentStatus
 
 	// Modelled from https://github.com/siderolabs/talos/blob/main/cmd/talosctl/cmd/talos/events.go
@@ -227,6 +229,7 @@ func (w NodeWatcher) Watch(controlContext context.Context, resultChan chan<- Nod
 		watchContext, killWatch := context.WithCancel(controlContext)
 		connectCtx, closeCtx := context.WithTimeout(watchContext, connectTimeout)
 
+		log.Debug("creating new client")
 		nodeClient, err := tclient.New(connectCtx, w.configOpts...)
 		if err != nil {
 			fmt.Printf("client error: %s\n", err.Error())
@@ -259,7 +262,9 @@ func (w NodeWatcher) Watch(controlContext context.Context, resultChan chan<- Nod
 					}
 
 					if bail {
+						log.Debug("killing watch")
 						killWatch()
+						conn.Close()
 						return
 					}
 					conn.WaitForStateChange(watchContext, connState)
