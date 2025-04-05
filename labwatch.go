@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DRuggeri/labwatch/browserhandler"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/talos"
 	"github.com/alecthomas/kingpin/v2"
@@ -163,6 +164,9 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "websockets.html")
 	})
+
+	browserHandler, _ := browserhandler.NewBrowserHandler(log)
+	http.Handle("/navigate", browserHandler)
 
 	err = http.ListenAndServe(":8080", nil)
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
