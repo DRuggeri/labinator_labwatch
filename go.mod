@@ -1,6 +1,7 @@
 module github.com/DRuggeri/labwatch
 
 go 1.24.1
+
 require (
 	github.com/BurntSushi/xgbutil v0.0.0-20190907113008-ad855c713046
 	github.com/alecthomas/kingpin/v2 v2.4.0
@@ -29,6 +30,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.24.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
