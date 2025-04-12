@@ -19,6 +19,21 @@ func main() {
 		panic(err)
 	}
 
+	// Port 8 is free - play around with it
+	log.Info("turning on port 8")
+	err = pman.TurnOn(powerman.P8)
+	if err != nil {
+		panic(err)
+	}
+
+	time.Sleep(time.Second)
+
+	log.Info("turning off port 8")
+	err = pman.TurnOff(powerman.P8)
+	if err != nil {
+		panic(err)
+	}
+
 	for {
 		status, err := pman.GetStatus()
 		if err != nil {
