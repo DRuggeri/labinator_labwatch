@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DRuggeri/labwatch/browserhandler"
+	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/talos"
 	"github.com/alecthomas/kingpin/v2"
@@ -31,9 +32,11 @@ type LabwatchConfig struct {
 	LokiQuery        string `yaml:"loki-query"`
 	TalosConfigFile  string `yaml:"talos-config"`
 	TalosClusterName string `yaml:"talos-cluster"`
+	PowerManagerPort string `yaml:"powermanager-port"`
 }
 type LabStatus struct {
 	Talos map[string]talos.NodeStatus `json:"talos"`
+	Power powerman.PowerStatus        `json:"power"`
 	Logs  loki.LogStats               `json:"logs"`
 }
 
@@ -67,6 +70,7 @@ func main() {
 		LokiQuery:        `{ host_name =~ ".+" } | json`,
 		TalosConfigFile:  "/home/boss/talos/talosconfig",
 		TalosClusterName: "koobs",
+		PowerManagerPort: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
 	}
 
 	if *config != "" {
@@ -82,7 +86,13 @@ func main() {
 		}
 	}
 
-	err := startWatchers(cfg, log)
+	pMan, err := powerman.NewPowerManager(cfg.PowerManagerPort, log)
+	if err != nil {
+		log.Error("failed to create the power manager", "error", err.Error())
+		os.Exit(1)
+	}
+
+	err = startWatchers(cfg, pMan, log)
 	if err != nil {
 		log.Error("failed to start watchers", "error", err.Error())
 		os.Exit(1)
@@ -95,6 +105,8 @@ func main() {
 		WriteBufferSize: 1024,
 		CheckOrigin:     func(r *http.Request) bool { return true },
 	}
+
+	http.Handle("/power", pMan)
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") == "" {
@@ -172,7 +184,7 @@ func main() {
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
-func startWatchers(cfg LabwatchConfig, log *slog.Logger) error {
+func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Logger) error {
 	log = log.With("operation", "startWatchers")
 	status := LabStatus{}
 
@@ -191,6 +203,9 @@ func startWatchers(cfg LabwatchConfig, log *slog.Logger) error {
 	stats := make(chan loki.LogStats)
 	go lWatcher.Watch(context.Background(), events, stats)
 
+	pInfo := make(chan powerman.PowerStatus)
+	go pMan.Watch(context.Background(), pInfo)
+
 	log = log.With("operation", "watchloop")
 	go func() {
 		for {
@@ -199,6 +214,13 @@ func startWatchers(cfg LabwatchConfig, log *slog.Logger) error {
 			case t, ok := <-tInfo:
 				if ok {
 					status.Talos = t
+					broadcastStatusUpdate = true
+				} else {
+					log.Error("error encountered reading talos states")
+				}
+			case p, ok := <-pInfo:
+				if ok {
+					status.Power = p
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading talos states")
@@ -217,7 +239,7 @@ func startWatchers(cfg LabwatchConfig, log *slog.Logger) error {
 						ch <- e
 					}
 				} else {
-					log.Error("error encountered reading ")
+					log.Error("error encountered reading events")
 				}
 			default:
 				time.Sleep(time.Millisecond * 100)

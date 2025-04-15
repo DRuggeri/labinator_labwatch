@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
@@ -34,13 +35,17 @@ func main() {
 		panic(err)
 	}
 
-	for {
-		status, err := pman.GetStatus()
-		if err != nil {
-			panic(err)
+	http.Handle("/power", pman)
+
+	go func() {
+		for {
+			status := pman.GetStatus()
+			b, _ := json.MarshalIndent(status, "", "  ")
+			log.Info(string(b))
+			time.Sleep(time.Second * 5)
 		}
-		b, _ := json.MarshalIndent(status, "", "  ")
-		log.Info(string(b))
-		time.Sleep(time.Second * 5)
-	}
+	}()
+
+	err = http.ListenAndServe(":8081", nil)
+	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
