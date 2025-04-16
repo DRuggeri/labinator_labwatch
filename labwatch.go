@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,6 +22,9 @@ import (
 
 	_ "net/http/pprof"
 )
+
+//go:embed all:site
+var siteFS embed.FS
 
 var (
 	Version  = "testing"
@@ -173,12 +178,17 @@ func main() {
 		}
 	})
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "websockets.html")
-	})
-
 	browserHandler, _ := browserhandler.NewBrowserHandler(log)
 	http.Handle("/navigate", browserHandler)
+
+	fsys, err := fs.Sub(siteFS, "site")
+	if err != nil {
+		log.Error("failed to set up site", "error", err.Error())
+		os.Exit(1)
+	}
+
+	fileServer := http.FileServer(http.FS(fsys))
+	http.Handle("/", fileServer)
 
 	err = http.ListenAndServe(":8080", nil)
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
