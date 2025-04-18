@@ -108,7 +108,7 @@ func (m *PowerManager) internalWatch() {
 }
 
 func (m *PowerManager) Watch(controlContext context.Context, resultChan chan<- PowerStatus) {
-	curStatus := m.status
+	curStatus := PowerStatus{}
 	for {
 		select {
 		case <-controlContext.Done():
