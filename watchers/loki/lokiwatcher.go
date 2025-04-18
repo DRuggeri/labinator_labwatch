@@ -94,6 +94,13 @@ func NewLokiWatcher(ctx context.Context, addr string, query string, log *slog.Lo
 func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- LogEvent, statChan chan<- LogStats) {
 	go func() {
 		for {
+			select {
+			case <-controlContext.Done():
+				return
+			default:
+				// Not ready to read from control channel - carry on
+			}
+
 			c, _, err := websocket.DefaultDialer.Dial(w.url.String(), nil)
 			if err != nil {
 				w.log.Error("error connecting to Loki", "error", err)
@@ -103,6 +110,13 @@ func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- Log
 
 			w.log.Info("connected to Loki")
 			for {
+				select {
+				case <-controlContext.Done():
+					return
+				default:
+					// Not ready to read from control channel - carry on
+				}
+
 				w.log.Debug("attempting to read...")
 				_, message, err := c.ReadMessage()
 				if err != nil {
