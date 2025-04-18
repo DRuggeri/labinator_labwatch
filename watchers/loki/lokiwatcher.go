@@ -37,14 +37,18 @@ type LogStats struct {
 	NumInfoMessages      int
 	NumDebugMessages     int
 
+	NumDHCPDiscover int
+	NumDHCPLeased   int
+
 	NumDNSQueries    int
 	NumDNSLocal      int
 	NumDNSRecursions int
 	NumDNSCached     int
 
-	NumCertChecks int
-	NumCertOK     int
-	NumCertSigned int
+	NumCertChecks  int
+	NumCertOK      int
+	NumCertSigned  int
+	NumCertRenewed int
 
 	NumFirewallWanInDrops  int
 	NumFirewallWanOutDrops int
@@ -256,7 +260,13 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 		}
 
 		if e.Service == "dnsmasq.service" {
-			if strings.HasPrefix(e.Message, "query") {
+			if strings.HasPrefix(e.Message, "dnsmasq-dhcp:") {
+				if strings.Contains(e.Message, "DHCPDISCOVER") {
+					w.stats.NumDHCPDiscover++
+				} else if strings.Contains(e.Message, "DHCPACK") {
+					w.stats.NumDHCPLeased++
+				}
+			} else if strings.HasPrefix(e.Message, "query") {
 				w.stats.NumDNSQueries++
 			} else if strings.HasPrefix(e.Message, "dnsmasq: config") {
 				w.stats.NumDNSLocal++
@@ -283,6 +293,8 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 			w.stats.NumCertOK++
 		} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/sign") && strings.Contains(e.Message, "status=201") {
 			w.stats.NumCertSigned++
+		} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/renew") && strings.Contains(e.Message, "status=201") {
+			w.stats.NumCertRenewed++
 		}
 	}
 }
