@@ -107,7 +107,7 @@ func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- Log
 				_, message, err := c.ReadMessage()
 				if err != nil {
 					log.Println("read:", err)
-					continue
+					break
 				}
 
 				w.log.Debug(fmt.Sprintf("read %d bytes", len(message)))
@@ -121,6 +121,9 @@ func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- Log
 					w.updateStats(events)
 					w.internalStatChan <- w.stats
 				}
+			}
+			if c != nil {
+				c.Close()
 			}
 		}
 	}()
