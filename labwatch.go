@@ -97,7 +97,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = startWatchers(cfg, pMan, log)
+	watcherCancel, err := startWatchers(cfg, pMan, log)
 	if err != nil {
 		log.Error("failed to start watchers", "error", err.Error())
 		os.Exit(1)
@@ -112,6 +112,15 @@ func main() {
 	}
 
 	http.Handle("/power", pMan)
+
+	http.HandleFunc("/resetwatchers", func(w http.ResponseWriter, r *http.Request) {
+		watcherCancel()
+		watcherCancel, err = startWatchers(cfg, pMan, log)
+		if err != nil {
+			log.Error("failed to restart watchers", "error", err.Error())
+			os.Exit(1)
+		}
+	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") == "" {
@@ -194,33 +203,38 @@ func main() {
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
-func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Logger) error {
+func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Logger) (context.CancelFunc, error) {
 	log = log.With("operation", "startWatchers")
 	status := LabStatus{}
+	ctx, cancel := context.WithCancel(context.Background())
 
-	tWatcher, err := talos.NewTalosWatcher(context.Background(), cfg.TalosConfigFile, cfg.TalosClusterName, log)
+	tWatcher, err := talos.NewTalosWatcher(ctx, cfg.TalosConfigFile, cfg.TalosClusterName, log)
 	if err != nil {
-		return err
+		cancel()
+		return nil, err
 	}
 	tInfo := make(chan map[string]talos.NodeStatus)
-	go tWatcher.Watch(context.Background(), tInfo)
+	go tWatcher.Watch(ctx, tInfo)
 
-	lWatcher, err := loki.NewLokiWatcher(context.Background(), cfg.LokiAddress, cfg.LokiQuery, log)
+	lWatcher, err := loki.NewLokiWatcher(ctx, cfg.LokiAddress, cfg.LokiQuery, log)
 	if err != nil {
-		return err
+		cancel()
+		return nil, err
 	}
 	events := make(chan loki.LogEvent)
 	stats := make(chan loki.LogStats)
-	go lWatcher.Watch(context.Background(), events, stats)
+	go lWatcher.Watch(ctx, events, stats)
 
 	pInfo := make(chan powerman.PowerStatus)
-	go pMan.Watch(context.Background(), pInfo)
+	go pMan.Watch(ctx, pInfo)
 
 	log = log.With("operation", "watchloop")
 	go func() {
 		for {
 			broadcastStatusUpdate := false
 			select {
+			case <-ctx.Done():
+				return
 			case t, ok := <-tInfo:
 				if ok {
 					status.Talos = t
@@ -266,7 +280,7 @@ func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Lo
 		}
 	}()
 
-	return nil
+	return cancel, nil
 }
 
 func addStatusClient(id string, ch chan<- LabStatus) {
