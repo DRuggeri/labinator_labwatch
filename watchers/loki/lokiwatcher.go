@@ -19,10 +19,11 @@ var sleepDuration = time.Duration(250) * time.Millisecond
 var QUERY = `{ host_name =~ ".+" } | json`
 
 type LogEvent struct {
-	Node    string
-	Service string
-	Level   string
-	Message string
+	Node       string
+	Service    string
+	Level      string
+	Message    string
+	Attributes map[string]string
 }
 
 type LogStats struct {
@@ -54,6 +55,8 @@ type LogStats struct {
 	NumFirewallWanOutDrops int
 	NumFirewallLanInDrops  int
 	NumFirewallLanOutDrops int
+
+	IPXETalosChainload int
 }
 
 type LokiWatcherConfig struct {
@@ -62,6 +65,7 @@ type LokiWatcherConfig struct {
 }
 type LokiWatcher struct {
 	url              url.URL
+	trace            bool
 	lastTs           int
 	internalLogChan  chan LogEvent
 	internalStatChan chan LogStats
@@ -69,7 +73,7 @@ type LokiWatcher struct {
 	log              *slog.Logger
 }
 
-func NewLokiWatcher(ctx context.Context, addr string, query string, log *slog.Logger) (*LokiWatcher, error) {
+func NewLokiWatcher(ctx context.Context, addr string, query string, trace bool, log *slog.Logger) (*LokiWatcher, error) {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -88,6 +92,7 @@ func NewLokiWatcher(ctx context.Context, addr string, query string, log *slog.Lo
 			Path:     "/loki/api/v1/tail",
 			RawQuery: q.Encode(),
 		},
+		trace:            trace,
 		internalLogChan:  make(chan LogEvent),
 		internalStatChan: make(chan LogStats),
 		lastTs:           int(time.Now().UnixMicro()) * 1000,
@@ -174,6 +179,33 @@ func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- Log
 /*
 	{
 	  "streams": [
+		{
+			"stream": {
+				"bytes": "432",
+				"code": "404",
+				"detected_level": "unknown",
+				"host_name": "boss",
+				"httpver": "HTTP/1.1",
+				"log_file_name": "other_vhosts_access.log",
+				"logname": "-",
+				"method": "GET",
+				"observed_timestamp": "1745074909238069850",
+				"port": "80",
+				"referrer": "-",
+				"remote": "127.0.0.1",
+				"service_name": "apache2",
+				"uri": "/foobar",
+				"user": "-",
+				"useragent": "curl/7.88.1",
+				"vhost": "boss.local"
+			},
+			"values": [
+				[
+				"1745074909000000000",
+				"boss.local:80 127.0.0.1 - - [19/Apr/2025:10:01:49 -0500] \"GET /foobar HTTP/1.1\" 404 432 \"-\" \"curl/7.88.1\""
+				]
+			]
+		},
 	    {
 	      "stream": {
 	        "MESSAGE": "dnsmasq: query[A] google.com from 192.168.122.3",
@@ -214,6 +246,10 @@ func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
 		return ret
 	}
 
+	if w.trace {
+		w.log.Debug("trace", "payload", string(m))
+	}
+
 	for _, stream := range msg.Streams {
 		thisTs, _ := strconv.Atoi(stream.Values[0][0])
 		if thisTs > w.lastTs {
@@ -224,10 +260,11 @@ func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
 
 		// This message is newer than the last batch of messages
 		e := LogEvent{
-			Node:    stream.Stream["host_name"],
-			Service: stream.Stream["service_name"],
-			Message: stream.Stream["MESSAGE"],
-			Level:   stream.Stream["level"],
+			Node:       stream.Stream["host_name"],
+			Service:    stream.Stream["service_name"],
+			Message:    stream.Stream["MESSAGE"],
+			Level:      stream.Stream["level"],
+			Attributes: stream.Stream,
 		}
 		ret = append(ret, e)
 	}
@@ -295,6 +332,12 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 			w.stats.NumCertSigned++
 		} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/renew") && strings.Contains(e.Message, "status=201") {
 			w.stats.NumCertRenewed++
+		}
+
+		if e.Service == "apache2.service" {
+			if strings.Contains(e.Message, "GET /talos-boot.ipxe") {
+				w.stats.IPXETalosChainload++
+			}
 		}
 	}
 }

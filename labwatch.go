@@ -35,6 +35,7 @@ var (
 type LabwatchConfig struct {
 	LokiAddress      string `yaml:"loki-address"`
 	LokiQuery        string `yaml:"loki-query"`
+	LokiTrace        bool   `yaml:"loki-trace"`
 	TalosConfigFile  string `yaml:"talos-config"`
 	TalosClusterName string `yaml:"talos-cluster"`
 	PowerManagerPort string `yaml:"powermanager-port"`
@@ -216,7 +217,7 @@ func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Lo
 	tInfo := make(chan map[string]talos.NodeStatus)
 	go tWatcher.Watch(ctx, tInfo)
 
-	lWatcher, err := loki.NewLokiWatcher(ctx, cfg.LokiAddress, cfg.LokiQuery, log)
+	lWatcher, err := loki.NewLokiWatcher(ctx, cfg.LokiAddress, cfg.LokiQuery, cfg.LokiTrace, log)
 	if err != nil {
 		cancel()
 		return nil, err

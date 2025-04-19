@@ -12,11 +12,13 @@ import (
 )
 
 func main() {
-	lvl := slog.LevelVar{}
-	lvl.Set(slog.LevelDebug)
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	w, err := loki.NewLokiWatcher(context.Background(), "boss.local:3100", "", log)
+	trace := true
+	printEvents := true
+	printStats := false
+
+	w, err := loki.NewLokiWatcher(context.Background(), "boss.local:3100", "", trace, log)
 	if err != nil {
 		panic(err)
 	}
@@ -29,11 +31,11 @@ func main() {
 		var b []byte
 		select {
 		case e, ok := <-events:
-			if ok {
+			if ok && printEvents {
 				b, _ = json.MarshalIndent(e, "", "  ")
 			}
 		case s, ok := <-stats:
-			if ok {
+			if ok && printStats {
 				b, _ = json.MarshalIndent(s, "", "  ")
 			}
 		default:
