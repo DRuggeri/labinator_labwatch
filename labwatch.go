@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -40,7 +41,10 @@ type LabwatchConfig struct {
 	TalosConfigFile  string `yaml:"talos-config"`
 	TalosClusterName string `yaml:"talos-cluster"`
 	PowerManagerPort string `yaml:"powermanager-port"`
+	NetbootFolder    string `yaml:"netboot-folder"`
+	NetbootLink      string `yaml:"netboot-link"`
 }
+
 type LabStatus struct {
 	Talos map[string]talos.NodeStatus `json:"talos"`
 	Power powerman.PowerStatus        `json:"power"`
@@ -78,6 +82,7 @@ func main() {
 		TalosConfigFile:  "/home/boss/talos/talosconfig",
 		TalosClusterName: "physical",
 		PowerManagerPort: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
+		NetbootFolder:    "/var/www/html/nodes-ipxe/",
 	}
 
 	if *config != "" {
@@ -130,7 +135,15 @@ func main() {
 
 	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
 		lab := strings.ToLower(r.URL.Query().Get("lab"))
+		if _, err := os.Stat(filepath.Join(cfg.NetbootFolder, lab)); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		os.Remove(filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
+		os.Symlink(filepath.Join(cfg.NetbootFolder, lab), filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
 		cfg.TalosClusterName = lab
+
 		resetWatchers()
 	})
 
