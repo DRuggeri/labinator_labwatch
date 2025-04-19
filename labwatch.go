@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,7 +76,7 @@ func main() {
 		LokiAddress:      "boss.local:3100",
 		LokiQuery:        `{ host_name =~ ".+" } | json`,
 		TalosConfigFile:  "/home/boss/talos/talosconfig",
-		TalosClusterName: "koobs",
+		TalosClusterName: "physical",
 		PowerManagerPort: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
 	}
 
@@ -114,13 +115,23 @@ func main() {
 
 	http.Handle("/power", pMan)
 
-	http.HandleFunc("/resetwatchers", func(w http.ResponseWriter, r *http.Request) {
+	resetWatchers := func() {
 		watcherCancel()
 		watcherCancel, err = startWatchers(cfg, pMan, log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
 			os.Exit(1)
 		}
+	}
+
+	http.HandleFunc("/resetwatchers", func(w http.ResponseWriter, r *http.Request) {
+		resetWatchers()
+	})
+
+	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
+		lab := strings.ToLower(r.URL.Query().Get("lab"))
+		cfg.TalosClusterName = lab
+		resetWatchers()
 	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {

@@ -22,6 +22,8 @@ var reconnectDuration = time.Duration(250) * time.Millisecond
 var sleepDuration = time.Duration(250) * time.Millisecond
 
 type TalosWatcher struct {
+	configFile   string
+	clusterName  string
 	config       *tcconfig.Config
 	client       *tclient.Client
 	Status       map[string]NodeStatus
@@ -69,9 +71,9 @@ type ConnectionState string
 const CONNECTION_OK ConnectionState = "connected"
 const CONNECTION_DISCONNECTED ConnectionState = "disconnected"
 
-// func NewTalosWatcher(configFile string, clusterName string) (watchers.Watcher, error) {
 func NewTalosWatcher(ctx context.Context, configFile string, clusterName string, log *slog.Logger) (*TalosWatcher, error) {
 	w := &TalosWatcher{
+		clusterName:  clusterName,
 		Status:       map[string]NodeStatus{},
 		watchers:     map[string]NodeWatcher{},
 		internalChan: make(chan NodeStatus),
@@ -84,25 +86,43 @@ func NewTalosWatcher(ctx context.Context, configFile string, clusterName string,
 	}
 	w.config = cfg
 
+	if err := w.ValidCluster(clusterName); err != nil {
+		return nil, err
+	}
+
+	return w, nil
+}
+
+func (w *TalosWatcher) ValidCluster(clusterName string) error {
+	if _, ok := w.config.Contexts[clusterName]; !ok {
+		return fmt.Errorf("the `%s` context name does not exist in the config file %s", w.clusterName, w.configFile)
+	}
+	return nil
+}
+
+func (w *TalosWatcher) Watch(controlContext context.Context, resultChan chan<- map[string]NodeStatus) {
 	var tctx *tcconfig.Context
 	var ok bool
-	if tctx, ok = cfg.Contexts[clusterName]; !ok {
-		return nil, fmt.Errorf("the %s context name does not exist in the config file %s", clusterName, configFile)
+	if tctx, ok = w.config.Contexts[w.clusterName]; !ok {
+		w.log.Error(fmt.Sprintf("the %s context name does not exist in the config file %s", w.clusterName, w.configFile))
+		return
 	}
 	w.talosContext = tctx
 
 	if len(tctx.Nodes) == 0 {
-		return nil, fmt.Errorf("there are no nodes defined in the %s config file", configFile)
+		w.log.Error(fmt.Sprintf("there are no nodes defined in the %s config file", w.configFile))
+		return
 	}
 
-	client, err := tclient.New(context.Background(), tclient.WithConfig(cfg))
+	client, err := tclient.New(controlContext, tclient.WithConfig(w.config))
 	if err != nil {
-		return nil, err
+		w.log.Error("error creating the client", "error", err.Error())
+		return
 	}
 	w.client = client
 
 	//Create a standalone client that can suffer connects/disconnects without affecting the overall client
-	for _, nodeName := range tctx.Nodes {
+	for _, nodeName := range w.talosContext.Nodes {
 		backoffConfig := backoff.DefaultConfig
 		backoffConfig.MaxDelay = time.Duration(1) * time.Second
 
@@ -119,8 +139,8 @@ func NewTalosWatcher(ctx context.Context, configFile string, clusterName string,
 				UnmetConditions: []string{},
 			},
 			configOpts: []tclient.OptionFunc{
-				tclient.WithConfig(cfg),
-				tclient.WithContextName(clusterName),
+				tclient.WithConfig(w.config),
+				tclient.WithContextName(w.clusterName),
 				tclient.WithEndpoints(nodeName),
 				tclient.WithGRPCDialOptions(grpc.WithConnectParams(
 					grpc.ConnectParams{
@@ -128,16 +148,14 @@ func NewTalosWatcher(ctx context.Context, configFile string, clusterName string,
 					},
 				)),
 			},
-			log: log.With("operation", "NodeWatcher", "node", nodeName),
+			log: w.log.With("operation", "NodeWatcher", "node", nodeName),
 		}
-		go nodeWatcher.Watch(ctx, w.internalChan)
+		go nodeWatcher.Watch(controlContext, w.internalChan)
 		w.watchers[nodeName] = nodeWatcher
 	}
 
-	return w, err
-}
+	w.log.Debug("watcher started")
 
-func (w *TalosWatcher) Watch(controlContext context.Context, resultChan chan<- map[string]NodeStatus) {
 	for {
 		select {
 		case <-controlContext.Done():

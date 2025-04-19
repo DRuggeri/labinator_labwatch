@@ -13,11 +13,9 @@ import (
 )
 
 func main() {
-	lvl := slog.LevelVar{}
-	lvl.Set(slog.LevelDebug)
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	w, err := talos.NewTalosWatcher(context.Background(), "/home/boss/talos/talosconfig", "koobs", log)
+	w, err := talos.NewTalosWatcher(context.Background(), "/home/boss/talos/talosconfig", "physical", log)
 	if err != nil {
 		panic(err)
 	}
