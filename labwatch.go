@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -145,6 +146,19 @@ func main() {
 		cfg.TalosClusterName = lab
 
 		resetWatchers()
+	})
+
+	http.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {
+		action := strings.ToLower(r.URL.Query().Get("action"))
+		switch action {
+		case "shutdown":
+			exec.Command("sudo /sbin/poweroff").Output()
+		case "restart":
+			exec.Command("sudo /sbin/reboot").Output()
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {

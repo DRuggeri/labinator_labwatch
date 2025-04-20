@@ -24,6 +24,42 @@
 			flex-wrap: unset !important;
 		}
 	</style>
+	<script>
+		function startLab(name) {
+			console.log(`starting lab ${name}`)
+			const req = new XMLHttpRequest();
+			req.open("GET", `/setlab?lab=${name}`, true);
+			req.onload = function() {
+				if (req.status == 200) {
+					console.log(`lab set to ${name}`);
+				} else {
+					console.log(`Request failed with status ${req.status}`);
+				}
+			};
+			req.send();
+		}
+		function linkThenGo(link, target) {
+			console.log(`hitting ${link}`)
+
+			const req = new XMLHttpRequest();
+			req.open("GET", link, true);
+			req.onload = function() {
+				if (req.status == 200) {
+					console.log(`headed to ${target}`);
+					const slide = Reveal.getSlides().find( ( slide ) => {
+						return slide.id == target;
+					});
+					if (slide ) {
+						i = Reveal.getIndices( slide )
+						Reveal.slide(i.h, i.v, i.f);
+					};
+				} else {
+					console.log(`Request failed with status ${req.status}`);
+				}
+			};
+			req.send();
+		}
+	</script>
 
     <!-- Theme used for syntax highlighted code -->
     <link rel="stylesheet" href="plugin/highlight/monokai.css">
@@ -33,24 +69,24 @@
 			<div id="menu" class="slides">
 				<section id="experiments" data-name="Experiments">
 					<a href="#/vms">Virtual Machines Only</a><br />
-					<a href="#/bms">Bare Metal Only</a><br />
+					<a href="#/physical">Bare Metal Only</a><br />
 					<a href="#/vmsbms">VM and BM Combo</a><br />
 					</section>
 					  <section id="vms">
 						<span class="small">Launch VM lab with...</span><br />
-						<a href="/setup/vms-2ea">2 VMs per host</a><br />
-						<a href="/setup/vms-3ea">3 VMs per host</a><br />
-						<a href="/setup/vms-4ea">4 VMs per host</a><br />
+						<a href="" onclick="startLab('virtual-2')">2 VMs per host</a><br />
+						<a href="" onclick="startLab('virtual-3')">3 VMs per host</a><br />
+						<a href="" onclick="startLab('virtual-4')">4 VMs per host</a><br />
 					  </section>
-					  <section id="bms">
+					  <section id="physical">
 						<span class="small">Launch Bare Metal lab...</span><br />
-						<a href="/setup/bms">All six nodes</a><br />
+						<a href="" onclick="startLab('physical')">All six nodes</a><br />
 					  </section>
 					  <section id="vmsbms">
 						<span class="small">Launch Bare Metal control plane with...</span><br />
-						<a href="/setup/hybrid-2ea">2 VMs per worker node</a><br />
-						<a href="/setup/hybrid-3ea">3 VMs per worker node</a><br />
-						<a href="/setup/hybrid-4ea">4 VMs per worker node</a><br />
+						<a href="" onclick="startLab('hybrid-2')">2 VMs per worker node</a><br />
+						<a href="" onclick="startLab('hybrid-3')">3 VMs per worker node</a><br />
+						<a href="" onclick="startLab('hybrid-4')">4 VMs per worker node</a><br />
 					  </section>
 				</section>
 				<section id="chaos" data-name="Chaos">
@@ -60,20 +96,20 @@
 					<a href="#/kill-az">Kill an AZ's Network</a><br />
 				</section>
 					<section id="kill-box">
-						<a href="kill1">Kill Box 1</a><br />
-						<a href="kill2">Kill Box 2</a><br />
-						<a href="kill3">Kill Box 3</a><br />
-						<a href="kill4">Kill Box 4</a><br />
-						<a href="kill5">Kill Box 5</a><br />
-						<a href="kill6">Kill Box 6</a><br />
+						<a onclick="linkThenGo('/power?action=turnoff&port=p1', 'chaos');">Kill Box 1</a><br />
+						<a onclick="linkThenGo('/power?action=turnoff&port=p2', 'chaos');">Kill Box 2</a><br />
+						<a onclick="linkThenGo('/power?action=turnoff&port=p3', 'chaos');">Kill Box 3</a><br />
+						<a onclick="linkThenGo('/power?action=turnoff&port=p4', 'chaos');">Kill Box 4</a><br />
+						<a onclick="linkThenGo('/power?action=turnoff&port=p5', 'chaos');">Kill Box 5</a><br />
+						<a onclick="linkThenGo('/power?action=turnoff&port=p6', 'chaos');">Kill Box 6</a><br />
 					</section>
 					<section id="restart-box">
-						<a href="restart1">Restart Box 1</a><br />
-						<a href="restart2">Restart Box 2</a><br />
-						<a href="restart3">Restart Box 3</a><br />
-						<a href="restart4">Restart Box 4</a><br />
-						<a href="restart5">Restart Box 5</a><br />
-						<a href="restart6">Restart Box 6</a><br />
+						<a href="" onclick="linkThenGo('/power?action=restart&port=p1', 'chaos');">Restart Box 1</a><br />
+						<a href="" onclick="linkThenGo('/power?action=restart&port=p2', 'chaos');">Restart Box 2</a><br />
+						<a href="" onclick="linkThenGo('/power?action=restart&port=p3', 'chaos');">Restart Box 3</a><br />
+						<a href="" onclick="linkThenGo('/power?action=restart&port=p4', 'chaos');">Restart Box 4</a><br />
+						<a href="" onclick="linkThenGo('/power?action=restart&port=p5', 'chaos');">Restart Box 5</a><br />
+						<a href="" onclick="linkThenGo('/power?action=restart&port=p6', 'chaos');">Restart Box 6</a><br />
 					</section>
 				</section>
 				<section id="observe" data-name="Observe">
@@ -81,8 +117,8 @@
 					<a href="/k8s dashboard">Kubernetes dashboard</a><br />
 				</section>
 				<section id="system" data-name="System">
-					<a href="/restart">Restart the Lab</a><br />
-					<a href="/shutdown">Shut Down the Lab</a><br />
+					<a href="/system?action=restart">Restart the Lab</a><br />
+					<a href="/system?action=shutdown">Shut Down the Lab</a><br />
 				</section>
 			</div>
 		</div>
