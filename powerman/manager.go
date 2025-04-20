@@ -294,6 +294,7 @@ func (m *PowerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "p8":
 		p = P8
 	default:
+		m.log.Info("bad request for port", "port", port)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -301,12 +302,16 @@ func (m *PowerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch strings.ToLower(action) {
 	case "turnon":
+		m.log.Info("powerman action", "action", action, "port", port)
 		err = m.TurnOn(p)
 	case "turnoff":
+		m.log.Info("powerman action", "action", action, "port", port)
 		err = m.TurnOff(p)
 	case "restart":
+		m.log.Info("powerman action", "action", action, "port", port)
 		err = m.Restart(p)
 	default:
+		m.log.Info("bad request for action", "action", action)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}

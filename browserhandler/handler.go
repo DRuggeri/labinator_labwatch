@@ -1,10 +1,9 @@
 package browserhandler
 
 import (
-	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/njasm/marionette_client"
 )
@@ -20,35 +19,26 @@ func NewBrowserHandler(l *slog.Logger) (*BrowserHandler, error) {
 }
 
 func (h *BrowserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	u := r.URL.Query().Get("url")
+	if u == "" {
+		h.log.Info("no URL provided")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	if _, err := url.Parse(u); err != nil {
+		h.log.Info("invalid URL provided", "error", err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err := NavigateTo(u)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	req := map[string]string{}
-	if err = json.Unmarshal(body, &req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	url, ok := req["url"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	err = NavigateTo(url)
-	if err != nil {
-		h.log.Error("failed to connect to browser", "error", err)
+		h.log.Info("failed to connect to browser", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
+	h.log.Info("navigated", "url", u)
 	w.WriteHeader(http.StatusOK)
 }
 

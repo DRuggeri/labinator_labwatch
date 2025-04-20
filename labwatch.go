@@ -122,6 +122,7 @@ func main() {
 	http.Handle("/power", pMan)
 
 	resetWatchers := func() {
+		log.Info("resetting watchers")
 		watcherCancel()
 		watcherCancel, err = startWatchers(cfg, pMan, log)
 		if err != nil {
@@ -137,10 +138,12 @@ func main() {
 	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
 		lab := strings.ToLower(r.URL.Query().Get("lab"))
 		if _, err := os.Stat(filepath.Join(cfg.NetbootFolder, lab)); err != nil {
+			log.Info("requested lab not defined", "lab", lab)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
+		log.Info("configuring lab", "lab", lab)
 		os.Remove(filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
 		os.Symlink(filepath.Join(cfg.NetbootFolder, lab), filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
 		cfg.TalosClusterName = lab
@@ -150,15 +153,36 @@ func main() {
 
 	http.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {
 		action := strings.ToLower(r.URL.Query().Get("action"))
+		var args []string
 		switch action {
 		case "shutdown":
-			exec.Command("sudo /sbin/poweroff").Output()
+			args = []string{"/usr/bin/sudo", "/usr/sbin/poweroff"}
 		case "restart":
-			exec.Command("sudo /sbin/reboot").Output()
+			args = []string{"/usr/bin/sudo", "/usr/sbin/reboot"}
 		default:
+			log.Info("invalid system action requested", "action", action)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		log.Info("performing system action", "action", action)
+		// Kill the boxen
+		pMan.TurnOff(powerman.P1)
+		pMan.TurnOff(powerman.P2)
+		pMan.TurnOff(powerman.P3)
+		pMan.TurnOff(powerman.P4)
+		pMan.TurnOff(powerman.P5)
+		pMan.TurnOff(powerman.P6)
+
+		// Do the needy to this box
+		out, err := exec.Command(args[0], args[1:]...).Output()
+		log.Debug("system command run", "output", string(out), "error", err.Error())
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
