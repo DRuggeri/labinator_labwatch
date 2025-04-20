@@ -24,40 +24,19 @@
 			flex-wrap: unset !important;
 		}
 	</style>
+	<script src="js/boss.js"></script>
 	<script>
-		function startLab(name) {
-			console.log(`starting lab ${name}`)
-			const req = new XMLHttpRequest();
-			req.open("GET", `/setlab?lab=${name}`, true);
-			req.onload = function() {
-				if (req.status == 200) {
-					console.log(`lab set to ${name}`);
-				} else {
-					console.log(`Request failed with status ${req.status}`);
-				}
-			};
-			req.send();
+		async function startLab(name) {
+			const ok = await backgroundSend(`/setlab?lab=${name}`)
+			if (ok) {
+				console.log(`lab set to ${name}`);
+			} else {
+				console.log(`Request failed with status ${req.status}`);
+			}
 		}
-		function linkThenGo(link, target) {
-			console.log(`hitting ${link}`)
-
-			const req = new XMLHttpRequest();
-			req.open("GET", link, true);
-			req.onload = function() {
-				if (req.status == 200) {
-					console.log(`headed to ${target}`);
-					const slide = Reveal.getSlides().find( ( slide ) => {
-						return slide.id == target;
-					});
-					if (slide ) {
-						i = Reveal.getIndices( slide )
-						Reveal.slide(i.h, i.v, i.f);
-					};
-				} else {
-					console.log(`Request failed with status ${req.status}`);
-				}
-			};
-			req.send();
+		async function sendThenSlide(link, target) {
+			const ok = await backgroundSend(link)
+			if (ok) gotoSlide(target)
 		}
 	</script>
 
@@ -74,19 +53,19 @@
 					</section>
 					  <section id="vms">
 						<span class="small">Launch VM lab with...</span><br />
-						<a href="" onclick="startLab('virtual-2')">2 VMs per host</a><br />
-						<a href="" onclick="startLab('virtual-3')">3 VMs per host</a><br />
-						<a href="" onclick="startLab('virtual-4')">4 VMs per host</a><br />
+						<a onclick="startLab('virtual-2')">2 VMs per host</a><br />
+						<a onclick="startLab('virtual-3')">3 VMs per host</a><br />
+						<a onclick="startLab('virtual-4')">4 VMs per host</a><br />
 					  </section>
 					  <section id="physical">
 						<span class="small">Launch Bare Metal lab...</span><br />
-						<a href="" onclick="startLab('physical')">All six nodes</a><br />
+						<a onclick="startLab('physical')">All six nodes</a><br />
 					  </section>
 					  <section id="vmsbms">
 						<span class="small">Launch Bare Metal control plane with...</span><br />
-						<a href="" onclick="startLab('hybrid-2')">2 VMs per worker node</a><br />
-						<a href="" onclick="startLab('hybrid-3')">3 VMs per worker node</a><br />
-						<a href="" onclick="startLab('hybrid-4')">4 VMs per worker node</a><br />
+						<a onclick="startLab('hybrid-2')">2 VMs per worker node</a><br />
+						<a onclick="startLab('hybrid-3')">3 VMs per worker node</a><br />
+						<a onclick="startLab('hybrid-4')">4 VMs per worker node</a><br />
 					  </section>
 				</section>
 				<section id="chaos" data-name="Chaos">
@@ -96,29 +75,29 @@
 					<a href="#/kill-az">Kill an AZ's Network</a><br />
 				</section>
 					<section id="kill-box">
-						<a onclick="linkThenGo('/power?action=turnoff&port=p1', 'chaos');">Kill Box 1</a><br />
-						<a onclick="linkThenGo('/power?action=turnoff&port=p2', 'chaos');">Kill Box 2</a><br />
-						<a onclick="linkThenGo('/power?action=turnoff&port=p3', 'chaos');">Kill Box 3</a><br />
-						<a onclick="linkThenGo('/power?action=turnoff&port=p4', 'chaos');">Kill Box 4</a><br />
-						<a onclick="linkThenGo('/power?action=turnoff&port=p5', 'chaos');">Kill Box 5</a><br />
-						<a onclick="linkThenGo('/power?action=turnoff&port=p6', 'chaos');">Kill Box 6</a><br />
+						<a onclick="sendThenSlide('/power?action=turnoff&port=p1', 'chaos');">Kill Box 1</a><br />
+						<a onclick="sendThenSlide('/power?action=turnoff&port=p2', 'chaos');">Kill Box 2</a><br />
+						<a onclick="sendThenSlide('/power?action=turnoff&port=p3', 'chaos');">Kill Box 3</a><br />
+						<a onclick="sendThenSlide('/power?action=turnoff&port=p4', 'chaos');">Kill Box 4</a><br />
+						<a onclick="sendThenSlide('/power?action=turnoff&port=p5', 'chaos');">Kill Box 5</a><br />
+						<a onclick="sendThenSlide('/power?action=turnoff&port=p6', 'chaos');">Kill Box 6</a><br />
 					</section>
 					<section id="restart-box">
-						<a href="" onclick="linkThenGo('/power?action=restart&port=p1', 'chaos');">Restart Box 1</a><br />
-						<a href="" onclick="linkThenGo('/power?action=restart&port=p2', 'chaos');">Restart Box 2</a><br />
-						<a href="" onclick="linkThenGo('/power?action=restart&port=p3', 'chaos');">Restart Box 3</a><br />
-						<a href="" onclick="linkThenGo('/power?action=restart&port=p4', 'chaos');">Restart Box 4</a><br />
-						<a href="" onclick="linkThenGo('/power?action=restart&port=p5', 'chaos');">Restart Box 5</a><br />
-						<a href="" onclick="linkThenGo('/power?action=restart&port=p6', 'chaos');">Restart Box 6</a><br />
+						<a onclick="sendThenSlide('/power?action=restart&port=p1', 'chaos');">Restart Box 1</a><br />
+						<a onclick="sendThenSlide('/power?action=restart&port=p2', 'chaos');">Restart Box 2</a><br />
+						<a onclick="sendThenSlide('/power?action=restart&port=p3', 'chaos');">Restart Box 3</a><br />
+						<a onclick="sendThenSlide('/power?action=restart&port=p4', 'chaos');">Restart Box 4</a><br />
+						<a onclick="sendThenSlide('/power?action=restart&port=p5', 'chaos');">Restart Box 5</a><br />
+						<a onclick="sendThenSlide('/power?action=restart&port=p6', 'chaos');">Restart Box 6</a><br />
 					</section>
 				</section>
 				<section id="observe" data-name="Observe">
-					<a href="/bosshealth">Boss health</a><br />
+					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=5s');">Boss health</a><br />
 					<a href="/k8s dashboard">Kubernetes dashboard</a><br />
 				</section>
 				<section id="system" data-name="System">
-					<a href="/system?action=restart">Restart the Lab</a><br />
-					<a href="/system?action=shutdown">Shut Down the Lab</a><br />
+					<a onclick="sendThenSlide('/system?action=restart', 'chaos');">Restart the Lab</a><br />
+					<a onclick="sendThenSlide('/system?action=shutdown', 'chaos');">Shut Down the Lab</a><br />
 				</section>
 			</div>
 		</div>
