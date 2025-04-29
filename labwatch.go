@@ -36,14 +36,16 @@ var (
 )
 
 type LabwatchConfig struct {
-	LokiAddress      string `yaml:"loki-address"`
-	LokiQuery        string `yaml:"loki-query"`
-	LokiTrace        bool   `yaml:"loki-trace"`
-	TalosConfigFile  string `yaml:"talos-config"`
-	TalosClusterName string `yaml:"talos-cluster"`
-	PowerManagerPort string `yaml:"powermanager-port"`
-	NetbootFolder    string `yaml:"netboot-folder"`
-	NetbootLink      string `yaml:"netboot-link"`
+	LokiAddress           string `yaml:"loki-address"`
+	LokiQuery             string `yaml:"loki-query"`
+	LokiTrace             bool   `yaml:"loki-trace"`
+	TalosConfigFile       string `yaml:"talos-config"`
+	TalosClusterName      string `yaml:"talos-cluster"`
+	TalosScenarioConfig   string `yaml:"talos-scenario-config"`
+	TalosScenarioNodesDir string `yaml:"talos-scenario-nodes-directory"`
+	PowerManagerPort      string `yaml:"powermanager-port"`
+	NetbootFolder         string `yaml:"netboot-folder"`
+	NetbootLink           string `yaml:"netboot-link"`
 }
 
 type LabStatus struct {
@@ -78,12 +80,14 @@ func main() {
 	log.Info("starting up labwatch", "version", Version)
 
 	cfg := LabwatchConfig{
-		LokiAddress:      "boss.local:3100",
-		LokiQuery:        `{ host_name =~ ".+" } | json`,
-		TalosConfigFile:  "/home/boss/talos/talosconfig",
-		TalosClusterName: "physical",
-		PowerManagerPort: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
-		NetbootFolder:    "/var/www/html/nodes-ipxe/",
+		LokiAddress:           "boss.local:3100",
+		LokiQuery:             `{ host_name =~ ".+" } | json`,
+		TalosConfigFile:       "/home/boss/talos/talosconfig",
+		TalosClusterName:      "physical",
+		PowerManagerPort:      "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
+		NetbootFolder:         "/var/www/html/nodes-ipxe/",
+		TalosScenarioConfig:   "/home/boss/talos/scenarios/configs.yaml",
+		TalosScenarioNodesDir: "/home/boss/talos/scenarios",
 	}
 
 	if *config != "" {
