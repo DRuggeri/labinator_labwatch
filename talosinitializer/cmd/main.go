@@ -10,7 +10,7 @@ import (
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	_, err := talosinitializer.NewTalosInitializer("/home/boss/talos/scenarios/configs.yaml", "/home/boss/talos/scenarios", "koob", log)
+	_, err := talosinitializer.NewTalosInitializer("/home/boss/talos/talosconfig", "/home/boss/talos/scenarios/configs.yaml", "/home/boss/talos/scenarios", "koob", log)
 	if err != nil {
 		panic(err)
 	}

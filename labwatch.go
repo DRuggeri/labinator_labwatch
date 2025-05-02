@@ -10,13 +10,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/DRuggeri/labwatch/browserhandler"
 	"github.com/DRuggeri/labwatch/powerman"
+	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/loki"
+	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/google/uuid"
@@ -51,6 +54,7 @@ type LabwatchConfig struct {
 type LabStatus struct {
 	Talos map[string]talos.NodeStatus `json:"talos"`
 	Power powerman.PowerStatus        `json:"power"`
+	Ports port.PortStatus             `json:"ports"`
 	Logs  loki.LogStats               `json:"logs"`
 }
 
@@ -63,6 +67,9 @@ func main() {
 	kingpin.Version(Version)
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
+
+	activeLab := ""
+	activeEndpoints := []string{}
 
 	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
 	switch *logLevel {
@@ -103,13 +110,19 @@ func main() {
 		}
 	}
 
+	initializer, err := talosinitializer.NewTalosInitializer(cfg.TalosConfigFile, cfg.TalosScenarioConfig, cfg.TalosScenarioNodesDir, "koob", log)
+	if err != nil {
+		log.Error("failed to create the Talos initializer", "error", err.Error())
+		os.Exit(1)
+	}
+
 	pMan, err := powerman.NewPowerManager(cfg.PowerManagerPort, log)
 	if err != nil {
 		log.Error("failed to create the power manager", "error", err.Error())
 		os.Exit(1)
 	}
 
-	watcherCancel, err := startWatchers(cfg, pMan, log)
+	watcherCancel, err := startWatchers(cfg, pMan, nil, nil, log)
 	if err != nil {
 		log.Error("failed to start watchers", "error", err.Error())
 		os.Exit(1)
@@ -128,7 +141,7 @@ func main() {
 	resetWatchers := func() {
 		log.Info("resetting watchers")
 		watcherCancel()
-		watcherCancel, err = startWatchers(cfg, pMan, log)
+		watcherCancel, err = startWatchers(cfg, pMan, activeEndpoints, initializer.GetPortStatusChan(), log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
 			os.Exit(1)
@@ -140,17 +153,39 @@ func main() {
 	})
 
 	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil { //catch
+				log.Error("failed setting lab", "error", err, "stack", debug.Stack())
+			}
+		}()
+
 		lab := strings.ToLower(r.URL.Query().Get("lab"))
 		if _, err := os.Stat(filepath.Join(cfg.NetbootFolder, lab)); err != nil {
 			log.Info("requested lab not defined", "lab", lab)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		endpoints, err := initializer.GetWatchEndpoints(lab)
+		if err != nil {
+			log.Info("could not get endpoints", "lab", lab, "error", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if len(endpoints) == 0 {
+			log.Error("could not find endpoints for lab", "lab", lab)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-		log.Info("configuring lab", "lab", lab)
+		activeLab = lab
+		activeEndpoints = endpoints
+		cfg.TalosClusterName = activeLab
+
+		log.Info("configuring lab", "lab", activeLab)
 		os.Remove(filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
-		os.Symlink(filepath.Join(cfg.NetbootFolder, lab), filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
-		cfg.TalosClusterName = lab
+		os.Symlink(filepath.Join(cfg.NetbootFolder, activeLab), filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
+		pMan.Restart(powerman.PALL)
+		go initializer.Initialize(lab, context.Background())
 
 		resetWatchers()
 	})
@@ -270,8 +305,9 @@ func main() {
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
-func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Logger) (context.CancelFunc, error) {
+func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, endpoints []string, portBroadcast chan<- port.PortStatus, log *slog.Logger) (context.CancelFunc, error) {
 	log = log.With("operation", "startWatchers")
+	log.Debug("starting watchers", "endpoints", endpoints, "portchan", portBroadcast != nil)
 	status := LabStatus{}
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -295,6 +331,14 @@ func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Lo
 	pInfo := make(chan powerman.PowerStatus)
 	go pMan.Watch(ctx, pInfo)
 
+	portWatcher, err := port.NewPortWatcher(ctx, endpoints, log)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	portInfo := make(chan port.PortStatus)
+	go portWatcher.Watch(ctx, portInfo)
+
 	log = log.With("operation", "watchloop")
 	go func() {
 		for {
@@ -313,6 +357,20 @@ func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, log *slog.Lo
 				if ok {
 					status.Power = p
 					broadcastStatusUpdate = true
+				} else {
+					log.Error("error encountered reading talos states")
+				}
+			case p, ok := <-portInfo:
+				if ok {
+					status.Ports = p
+					broadcastStatusUpdate = true
+					if portBroadcast != nil {
+						select {
+						case portBroadcast <- p:
+						default:
+							// Broadcast would have blocked, just discard
+						}
+					}
 				} else {
 					log.Error("error encountered reading talos states")
 				}
