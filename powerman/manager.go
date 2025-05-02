@@ -26,30 +26,33 @@ type PowerStatus struct {
 
 var sleepDuration = time.Second
 
-type Port int
+type Port string
 
 func (p Port) IsValid() bool {
-	if p < 1 || p > 8 {
-		return false
+	switch p {
+	case "1", "2", "3", "4", "5", "6", "7", "8", "all":
+		return true
 	}
-	return true
+	return false
 }
 
 const (
-	_ Port = iota
-	P1
-	P2
-	P3
-	P4
-	P5
-	P6
-	P7
-	P8
+	PALL Port = "all"
+	P1   Port = "1"
+	P2   Port = "2"
+	P3   Port = "3"
+	P4   Port = "4"
+	P5   Port = "5"
+	P6   Port = "6"
+	P7   Port = "7"
+	P8   Port = "8"
 )
 
+var ALL_PORTS = []Port{P1, P2, P3, P4, P5, P6}
+
 const COMMAND_STATUS = "status\r\n"
-const COMMAND_ON_TEMPLATE = "on %d\r\n"
-const COMMAND_OFF_TEMPLATE = "off %d\r\n"
+const COMMAND_ON_TEMPLATE = "on %v\r\n"
+const COMMAND_OFF_TEMPLATE = "off %v\r\n"
 
 type PowerManager struct {
 	opts    serial.OpenOptions
@@ -171,81 +174,111 @@ func (m *PowerManager) GetStatus() PowerStatus {
 	return m.status
 }
 
-func (m *PowerManager) TurnOn(p Port) error {
+func (m *PowerManager) TurnOn(i Port) error {
 	// Ignore bunk inputs
-	if !p.IsValid() {
-		m.log.Warn("bunk port provided - ignoring", "port", p)
+	if !i.IsValid() {
+		m.log.Warn("bunk port provided - ignoring", "port", i)
 		return nil
 	}
 
-	m.log.Debug(fmt.Sprintf("turning on port %d", p), "current", m.GetPortStatus(p))
-
-	if m.GetPortStatus(p) {
-		// Already on
-		return nil
+	ports := []Port{i}
+	if i == PALL {
+		ports = ALL_PORTS
 	}
 
-	cmd := fmt.Sprintf(COMMAND_ON_TEMPLATE, p)
-	l, err := m.port.Write([]byte(cmd))
-	if err != nil {
-		return err
-	}
-	if l < len(cmd) {
-		return fmt.Errorf("error turning on port: expected to write %d but only wrote %d", len(cmd), l)
-	}
+	for _, p := range ports {
+		m.log.Debug(fmt.Sprintf("turning on port %v", p), "current", m.GetPortStatus(p))
 
-	return nil
-}
+		if m.GetPortStatus(p) {
+			// Already on
+			return nil
+		}
 
-func (m *PowerManager) TurnOff(p Port) error {
-	// Ignore bunk inputs
-	if !p.IsValid() {
-		m.log.Warn("bunk port provided - ignoring", "port", p)
-		return nil
-	}
-
-	m.log.Debug(fmt.Sprintf("turning off port %d", p), "current", m.GetPortStatus(p))
-
-	if !m.GetPortStatus(p) {
-		// Already off
-		return nil
-	}
-
-	cmd := fmt.Sprintf(COMMAND_OFF_TEMPLATE, p)
-	l, err := m.port.Write([]byte(cmd))
-	if err != nil {
-		return err
-	}
-	if l < len(cmd) {
-		return fmt.Errorf("error turning off port: expected to write %d but only wrote %d", len(cmd), l)
-	}
-
-	return nil
-}
-
-func (m *PowerManager) Restart(p Port) error {
-	// Ignore bunk inputs
-	if !p.IsValid() {
-		m.log.Warn("bunk port provided - ignoring", "port", p)
-		return nil
-	}
-
-	m.log.Debug(fmt.Sprintf("restarting port %d", p), "current", m.GetPortStatus(p))
-
-	// Only turn it off if it is on
-	if m.GetPortStatus(p) {
-		err := m.TurnOff(p)
+		cmd := fmt.Sprintf(COMMAND_ON_TEMPLATE, p)
+		l, err := m.port.Write([]byte(cmd))
 		if err != nil {
-			return fmt.Errorf("error restarting port: %w", err)
+			return err
+		}
+		if l < len(cmd) {
+			return fmt.Errorf("error turning on port: expected to write %d but only wrote %d", len(cmd), l)
 		}
 	}
 
-	// Spin until the status is updated
-	for m.GetPortStatus(p) {
-		time.Sleep(time.Millisecond * 10)
+	return nil
+}
+
+func (m *PowerManager) TurnOff(i Port) error {
+	// Ignore bunk inputs
+	if !i.IsValid() {
+		m.log.Warn("bunk port provided - ignoring", "port", i)
+		return nil
 	}
 
-	return m.TurnOn(p)
+	ports := []Port{i}
+	if i == PALL {
+		ports = ALL_PORTS
+	}
+
+	for _, p := range ports {
+		m.log.Debug(fmt.Sprintf("turning off port %v", p), "current", m.GetPortStatus(p))
+
+		if !m.GetPortStatus(i) {
+			// Already off
+			continue
+		}
+
+		cmd := fmt.Sprintf(COMMAND_OFF_TEMPLATE, p)
+		l, err := m.port.Write([]byte(cmd))
+		if err != nil {
+			return err
+		}
+		if l < len(cmd) {
+			return fmt.Errorf("error turning off port: expected to write %d but only wrote %d", len(cmd), l)
+		}
+	}
+
+	return nil
+}
+
+func (m *PowerManager) Restart(i Port) error {
+	// Ignore bunk inputs
+	if !i.IsValid() {
+		m.log.Warn("bunk port provided - ignoring", "port", i)
+		return nil
+	}
+
+	ports := []Port{i}
+	if i == PALL {
+		ports = ALL_PORTS
+	}
+
+	m.log.Debug(fmt.Sprintf("restarting ports %v", ports))
+
+	for _, p := range ports {
+		// Only turn it off if it is on
+		if m.GetPortStatus(p) {
+			err := m.TurnOff(p)
+			if err != nil {
+				return fmt.Errorf("error restarting port %v: %w", p, err)
+			}
+		}
+	}
+
+	// Spin until the status is updated on all of them
+	for _, p := range ports {
+		for m.GetPortStatus(p) {
+			time.Sleep(time.Millisecond * 10)
+		}
+	}
+
+	for _, p := range ports {
+		err := m.TurnOn(p)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *PowerManager) GetPortStatus(p Port) bool {
@@ -293,6 +326,8 @@ func (m *PowerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p = P7
 	case "p8":
 		p = P8
+	case "all":
+		p = PALL
 	default:
 		m.log.Info("bad request for port", "port", port)
 		w.WriteHeader(http.StatusBadRequest)
