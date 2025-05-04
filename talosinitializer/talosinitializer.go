@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,6 +23,17 @@ type TalosInitializer struct {
 	log            *slog.Logger
 	k8sContext     string
 	portStatuses   chan port.PortStatus
+	statusChan     chan InitializerStatus
+}
+
+type InitializerStatus struct {
+	NumHypervisors         int
+	InitializedHypervisors int
+	NumNodes               int
+	InitializedNodes       int
+	NumPods                int
+	InitializedPods        int
+	CurrentStep            string
 }
 
 type ScenarioConfig struct {
@@ -43,6 +55,8 @@ type HypervisorInfo struct {
 	IP  string `yaml:"ip"`
 	MAC string `yaml:"mac"`
 }
+
+var kubectlExtractRe = regexp.MustCompile(`^(\S+)\s+(\S+)`)
 
 func NewTalosInitializer(talosConfigFile string, scenarioConfigFile string, scenarioNodesDir string, k8sContext string, log *slog.Logger) (*TalosInitializer, error) {
 	d, err := os.ReadFile(scenarioConfigFile)
@@ -86,6 +100,7 @@ func NewTalosInitializer(talosConfigFile string, scenarioConfigFile string, scen
 		k8sContext:     k8sContext,
 		log:            log.With("operation", "TalosInitializer"),
 		portStatuses:   make(chan port.PortStatus),
+		statusChan:     make(chan InitializerStatus),
 	}, nil
 }
 
@@ -108,8 +123,19 @@ func (i *TalosInitializer) GetWatchEndpoints(scenario string) ([]string, error) 
 	return endpoints, nil
 }
 
-func (i *TalosInitializer) GetPortStatusChan() chan<- port.PortStatus {
+func (i *TalosInitializer) GetPortChan() chan<- port.PortStatus {
 	return i.portStatuses
+}
+
+func (i *TalosInitializer) GetStatusUpdateChan() <-chan InitializerStatus {
+	return i.statusChan
+}
+func (i *TalosInitializer) SendStatusUpdate(s InitializerStatus) {
+	select {
+	case i.statusChan <- s:
+	default:
+		// No listeners - avoid blocking
+	}
 }
 
 func (i *TalosInitializer) Initialize(scenario string, controlContext context.Context) {
@@ -130,6 +156,13 @@ func (i *TalosInitializer) Initialize(scenario string, controlContext context.Co
 	for _, name := range nodeNames {
 		nodeEndpointMap[fmt.Sprintf("%s:50000", config.Nodes[name].IP)] = config.Nodes[name]
 	}
+
+	initStatus := InitializerStatus{
+		NumHypervisors: len(hypervisors),
+		NumNodes:       len(nodeNames),
+		CurrentStep:    "initializing",
+	}
+	i.SendStatusUpdate(initStatus)
 
 	log.Debug("entering initialization loop")
 	currentStatus := port.PortStatus{}
@@ -158,11 +191,13 @@ INITLOOP:
 					log.Info(fmt.Sprintf("hypervisor is up - starting %d VMs", len(hypervisors[ip])), "ip", ip)
 					hypervisorAddr := hypervisorEndpointMap[endpoint]
 					delete(hypervisorEndpointMap, endpoint)
+					initStatus.InitializedHypervisors++
 					go StartVMsOnHypervisor(hypervisorAddr, hypervisors[ip], log)
 
 				} else if node, ok := nodeEndpointMap[endpoint]; ok {
 					log.Info("node is up", "name", node.Name)
 					delete(nodeEndpointMap, endpoint)
+					initStatus.InitializedNodes++
 					//ConfigureNode(node.IP, node.configFile, scenario, log)
 				} else {
 					log.Error("discarding port up information because it is not a known hypervisor or node", "endpoint", endpoint)
@@ -177,6 +212,7 @@ INITLOOP:
 				break INITLOOP
 			}
 			log.Debug("initializations to complete", "hypervisors", len(hypervisorEndpointMap), "nodes", len(nodeEndpointMap))
+			i.SendStatusUpdate(initStatus)
 		}
 	}
 	log.Debug("completed initialization loop")
@@ -184,11 +220,25 @@ INITLOOP:
 	// All the nodes have been reconfigured so we can now bootstrap via any control plane node
 	for name, node := range config.Nodes {
 		if node.Role == "controlplane" {
+			initStatus.CurrentStep = "bootstrapping"
+			i.SendStatusUpdate(initStatus)
 			log.Info("bootstrapping Kubernetes through control plane node", "node", name)
 			BootstrapCluster(i.talosConfig, node.IP, scenario, i.k8sContext, log)
 			break
 		}
 	}
+
+	initStatus.CurrentStep = "finalizing"
+	i.SendStatusUpdate(initStatus)
+	FinalizeInstall(log)
+
+	initStatus.CurrentStep = "starting"
+	i.SendStatusUpdate(initStatus)
+	i.awaitPods(&initStatus, log)
+
+	initStatus.CurrentStep = "done"
+	i.SendStatusUpdate(initStatus)
+	log.Info("initialization complete")
 }
 
 func (config ScenarioConfig) GetHypervisorsAndNodes() (map[string][]NodeConfig, []string) {
@@ -295,7 +345,70 @@ func BootstrapCluster(talosConfig string, ip string, talosContext string, k8sCon
 	result, err = command.CombinedOutput()
 	log.Debug("run result", "command", command, "error", err, "output", string(result))
 	if err != nil {
+		log.Error("fetching k8s config failed", "output", string(result))
+		return
+	}
+}
+
+func FinalizeInstall(log *slog.Logger) {
+	log.Info("finalizing installation with post-install script")
+	command := exec.Command("bash", "/home/boss/kube/post-install.sh")
+	result, err := command.CombinedOutput()
+	log.Debug("run result", "command", command, "error", err, "output", string(result))
+	if err != nil {
 		log.Error("fetching k8s config filed", "output", string(result))
 		return
+	}
+}
+
+func (i *TalosInitializer) awaitPods(initStatus *InitializerStatus, log *slog.Logger) {
+	log.Info("awaiting pod starts")
+	lastStatus := *initStatus
+
+	waitingPods := 100
+	for waitingPods > 0 {
+		waitingPods = 0
+		initStatus.NumPods = 0
+		initStatus.InitializedPods = 0
+
+		command := exec.Command("kubectl",
+			"get", "pods", "--all-namespaces", "--no-headers",
+			"-o=custom-columns=POD_NAME:.metadata.name,STATUS:.status.phase",
+		)
+		result, err := command.Output()
+		log.Debug("run result", "command", command, "error", err, "output", string(result))
+		if err != nil {
+			log.Error("fetching k8s config failed", "output", string(result))
+			return
+		}
+
+		waitingPods = 0
+		for _, line := range strings.Split(string(result), "\n") {
+			if line == "" {
+				continue
+			}
+
+			matches := kubectlExtractRe.FindStringSubmatch(line)
+			if len(matches) == 0 {
+				log.Error("failed to extract information from line", "line", line)
+				return
+			}
+			initStatus.NumPods++
+			if matches[2] == "Running" {
+				initStatus.InitializedPods++
+			} else {
+				waitingPods++
+			}
+		}
+
+		log.Debug("pod progress", "total", initStatus.NumPods, "done", initStatus.InitializedPods)
+		if *initStatus != lastStatus {
+			lastStatus = *initStatus
+			i.SendStatusUpdate(lastStatus)
+		}
+
+		if waitingPods != 0 {
+			time.Sleep(time.Second)
+		}
 	}
 }

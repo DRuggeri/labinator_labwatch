@@ -52,10 +52,11 @@ type LabwatchConfig struct {
 }
 
 type LabStatus struct {
-	Talos map[string]talos.NodeStatus `json:"talos"`
-	Power powerman.PowerStatus        `json:"power"`
-	Ports port.PortStatus             `json:"ports"`
-	Logs  loki.LogStats               `json:"logs"`
+	Initializer talosinitializer.InitializerStatus `json:"initializer"`
+	Talos       map[string]talos.NodeStatus        `json:"talos"`
+	Power       powerman.PowerStatus               `json:"power"`
+	Ports       port.PortStatus                    `json:"ports"`
+	Logs        loki.LogStats                      `json:"logs"`
 }
 
 var currentStatus = LabStatus{}
@@ -141,7 +142,7 @@ func main() {
 	resetWatchers := func() {
 		log.Info("resetting watchers")
 		watcherCancel()
-		watcherCancel, err = startWatchers(cfg, pMan, activeEndpoints, initializer.GetPortStatusChan(), log)
+		watcherCancel, err = startWatchers(cfg, pMan, activeEndpoints, initializer, log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
 			os.Exit(1)
@@ -150,6 +151,11 @@ func main() {
 
 	http.HandleFunc("/resetwatchers", func(w http.ResponseWriter, r *http.Request) {
 		resetWatchers()
+	})
+
+	http.HandleFunc("/getlab", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(activeLab))
 	})
 
 	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
@@ -305,8 +311,17 @@ func main() {
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
-func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, endpoints []string, portBroadcast chan<- port.PortStatus, log *slog.Logger) (context.CancelFunc, error) {
+func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, endpoints []string, initializer *talosinitializer.TalosInitializer, log *slog.Logger) (context.CancelFunc, error) {
 	log = log.With("operation", "startWatchers")
+
+	var portBroadcast chan<- port.PortStatus
+	var iInfo <-chan talosinitializer.InitializerStatus
+
+	if initializer != nil {
+		portBroadcast = initializer.GetPortChan()
+		iInfo = initializer.GetStatusUpdateChan()
+	}
+
 	log.Debug("starting watchers", "endpoints", endpoints, "portchan", portBroadcast != nil)
 	status := LabStatus{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -346,6 +361,13 @@ func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, endpoints []
 			select {
 			case <-ctx.Done():
 				return
+			case i, ok := <-iInfo:
+				if ok {
+					status.Initializer = i
+					broadcastStatusUpdate = true
+				} else {
+					log.Error("error encountered reading initializer status")
+				}
 			case t, ok := <-tInfo:
 				if ok {
 					status.Talos = t
@@ -358,7 +380,7 @@ func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, endpoints []
 					status.Power = p
 					broadcastStatusUpdate = true
 				} else {
-					log.Error("error encountered reading talos states")
+					log.Error("error encountered reading power status")
 				}
 			case p, ok := <-portInfo:
 				if ok {
@@ -372,7 +394,7 @@ func startWatchers(cfg LabwatchConfig, pMan *powerman.PowerManager, endpoints []
 						}
 					}
 				} else {
-					log.Error("error encountered reading talos states")
+					log.Error("error encountered reading port states")
 				}
 			case s, ok := <-stats:
 				if ok {
