@@ -28,6 +28,7 @@ type TalosInitializer struct {
 }
 
 type InitializerStatus struct {
+	Name                   string
 	NumHypervisors         int
 	InitializedHypervisors int
 	NumNodes               int
@@ -101,7 +102,7 @@ func NewTalosInitializer(talosConfigFile string, scenarioConfigFile string, scen
 		k8sContext:     k8sContext,
 		log:            log.With("operation", "TalosInitializer"),
 		portStatuses:   make(chan port.PortStatus),
-		statusChan:     make(chan InitializerStatus),
+		statusChan:     make(chan InitializerStatus, 5),
 	}, nil
 }
 
@@ -131,11 +132,13 @@ func (i *TalosInitializer) GetPortChan() chan<- port.PortStatus {
 func (i *TalosInitializer) GetStatusUpdateChan() <-chan InitializerStatus {
 	return i.statusChan
 }
+
 func (i *TalosInitializer) SendStatusUpdate(s InitializerStatus) {
 	select {
 	case i.statusChan <- s:
 	default:
 		// No listeners - avoid blocking
+		i.log.Debug("discarding status update - would block")
 	}
 }
 
@@ -162,6 +165,7 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 		NumHypervisors: len(hypervisors),
 		NumNodes:       len(nodeNames),
 		CurrentStep:    "initializing",
+		Name:           scenario,
 	}
 	i.SendStatusUpdate(initStatus)
 
