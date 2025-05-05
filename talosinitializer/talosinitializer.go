@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -138,7 +139,7 @@ func (i *TalosInitializer) SendStatusUpdate(s InitializerStatus) {
 	}
 }
 
-func (i *TalosInitializer) Initialize(scenario string, controlContext context.Context) {
+func (i *TalosInitializer) Initialize(controlContext context.Context, scenario string) {
 	config, ok := i.scenarioConfig[scenario]
 	log := i.log.With("operation", fmt.Sprintf("TalosInitializer-%s", scenario))
 	if !ok {
@@ -165,6 +166,7 @@ func (i *TalosInitializer) Initialize(scenario string, controlContext context.Co
 	i.SendStatusUpdate(initStatus)
 
 	log.Debug("entering initialization loop")
+	nextDebugStatus := time.Now().Add(5 * time.Second)
 	currentStatus := port.PortStatus{}
 INITLOOP:
 	for {
@@ -192,7 +194,7 @@ INITLOOP:
 					hypervisorAddr := hypervisorEndpointMap[endpoint]
 					delete(hypervisorEndpointMap, endpoint)
 					initStatus.InitializedHypervisors++
-					go StartVMsOnHypervisor(hypervisorAddr, hypervisors[ip], log)
+					go StartVMsOnHypervisor(controlContext, hypervisorAddr, hypervisors[ip], log)
 
 				} else if node, ok := nodeEndpointMap[endpoint]; ok {
 					log.Info("node is up", "name", node.Name)
@@ -211,9 +213,34 @@ INITLOOP:
 			if len(hypervisorEndpointMap) == 0 && len(nodeEndpointMap) == 0 {
 				break INITLOOP
 			}
-			log.Debug("initializations to complete", "hypervisors", len(hypervisorEndpointMap), "nodes", len(nodeEndpointMap))
 			i.SendStatusUpdate(initStatus)
+		default:
+			// Not cancelled and no port updates - emit a status update for debug?
+			time.Sleep(100 * time.Millisecond)
+			if nextDebugStatus.After(time.Now()) {
+				continue INITLOOP
+			}
 		}
+
+		todoHypervisors := []string{}
+		for n := range hypervisorEndpointMap {
+			todoHypervisors = append(todoHypervisors, n)
+		}
+		slices.Sort(todoHypervisors)
+
+		todoNodes := []string{}
+		for n := range nodeEndpointMap {
+			todoNodes = append(todoNodes, n)
+		}
+		slices.Sort(todoNodes)
+
+		log.Debug("initializations to complete",
+			"numHypervisors", len(hypervisorEndpointMap),
+			"numNodes", len(nodeEndpointMap),
+			"hypervisors", strings.Join(todoHypervisors, ","),
+			"nodes", strings.Join(todoNodes, ","),
+		)
+		nextDebugStatus = time.Now().Add(5 * time.Second)
 	}
 	log.Debug("completed initialization loop")
 
@@ -223,18 +250,18 @@ INITLOOP:
 			initStatus.CurrentStep = "bootstrapping"
 			i.SendStatusUpdate(initStatus)
 			log.Info("bootstrapping Kubernetes through control plane node", "node", name)
-			BootstrapCluster(i.talosConfig, node.IP, scenario, i.k8sContext, log)
+			BootstrapCluster(controlContext, i.talosConfig, node.IP, scenario, i.k8sContext, log)
 			break
 		}
 	}
 
 	initStatus.CurrentStep = "finalizing"
 	i.SendStatusUpdate(initStatus)
-	FinalizeInstall(log)
+	FinalizeInstall(controlContext, log)
 
 	initStatus.CurrentStep = "starting"
 	i.SendStatusUpdate(initStatus)
-	i.awaitPods(&initStatus, log)
+	i.awaitPods(controlContext, &initStatus, log)
 
 	initStatus.CurrentStep = "done"
 	i.SendStatusUpdate(initStatus)
@@ -261,7 +288,7 @@ func (config ScenarioConfig) GetHypervisorsAndNodes() (map[string][]NodeConfig, 
 	return hypervisors, nodes
 }
 
-func StartVMsOnHypervisor(ip string, nodes []NodeConfig, log *slog.Logger) {
+func StartVMsOnHypervisor(ctx context.Context, ip string, nodes []NodeConfig, log *slog.Logger) {
 	for i, node := range nodes {
 		for {
 			startCommand := "" +
@@ -275,7 +302,7 @@ func StartVMsOnHypervisor(ip string, nodes []NodeConfig, log *slog.Logger) {
 				"              --memory 2048 --vcpus 2 --os-variant ubuntu22.10 --virt-type kvm" +
 				"              --boot network --noautoconsole --import"
 
-			command := exec.Command("ssh",
+			command := exec.CommandContext(ctx, "ssh",
 				"-o", "StrictHostKeyChecking=no",
 				"-o", "UserKnownHostsFile=/dev/null",
 				fmt.Sprintf("root@%s", ip),
@@ -294,8 +321,8 @@ func StartVMsOnHypervisor(ip string, nodes []NodeConfig, log *slog.Logger) {
 	}
 }
 
-func ConfigureNode(ip string, configFile string, talosContext string, log *slog.Logger) {
-	command := exec.Command("talosctl",
+func ConfigureNode(ctx context.Context, ip string, configFile string, talosContext string, log *slog.Logger) {
+	command := exec.CommandContext(ctx, "talosctl",
 		"--nodes", ip,
 		"apply-config",
 		"--insecure",
@@ -305,8 +332,8 @@ func ConfigureNode(ip string, configFile string, talosContext string, log *slog.
 	log.Debug("run result", "startcommand", command, "error", err, "output", string(result))
 }
 
-func BootstrapCluster(talosConfig string, ip string, talosContext string, k8sContext string, log *slog.Logger) {
-	command := exec.Command("talosctl",
+func BootstrapCluster(ctx context.Context, talosConfig string, ip string, talosContext string, k8sContext string, log *slog.Logger) {
+	command := exec.CommandContext(ctx, "talosctl",
 		"--talosconfig", talosConfig,
 		"--context", talosContext,
 		"--nodes", ip,
@@ -323,6 +350,12 @@ func BootstrapCluster(talosConfig string, ip string, talosContext string, k8sCon
 
 	//Wait for port 6443 in case node is restarting and still coming up
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:6443", ip), time.Second)
 		if err != nil {
 			time.Sleep(time.Second)
@@ -333,7 +366,7 @@ func BootstrapCluster(talosConfig string, ip string, talosContext string, k8sCon
 	}
 
 	//Fetch the K8S config
-	command = exec.Command("talosctl",
+	command = exec.CommandContext(ctx, "talosctl",
 		"--talosconfig", talosConfig,
 		"--context", talosContext,
 		"--nodes", ip,
@@ -350,9 +383,9 @@ func BootstrapCluster(talosConfig string, ip string, talosContext string, k8sCon
 	}
 }
 
-func FinalizeInstall(log *slog.Logger) {
+func FinalizeInstall(ctx context.Context, log *slog.Logger) {
 	log.Info("finalizing installation with post-install script")
-	command := exec.Command("bash", "/home/boss/kube/post-install.sh")
+	command := exec.CommandContext(ctx, "bash", "/home/boss/kube/post-install.sh")
 	result, err := command.CombinedOutput()
 	log.Debug("run result", "command", command, "error", err, "output", string(result))
 	if err != nil {
@@ -361,12 +394,18 @@ func FinalizeInstall(log *slog.Logger) {
 	}
 }
 
-func (i *TalosInitializer) awaitPods(initStatus *InitializerStatus, log *slog.Logger) {
+func (i *TalosInitializer) awaitPods(ctx context.Context, initStatus *InitializerStatus, log *slog.Logger) {
 	log.Info("awaiting pod starts")
 	lastStatus := *initStatus
 
 	waitingPods := 100
 	for waitingPods > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		waitingPods = 0
 		initStatus.NumPods = 0
 		initStatus.InitializedPods = 0

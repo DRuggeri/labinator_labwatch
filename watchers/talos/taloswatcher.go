@@ -235,6 +235,7 @@ func (w NodeWatcher) Watch(controlContext context.Context, resultChan chan<- Nod
 		resultChan <- w.CurrentStatus
 	}
 
+	log.Debug("creating new client", "node", w.CurrentStatus.Node)
 	for {
 		select {
 		case <-controlContext.Done():
@@ -247,7 +248,6 @@ func (w NodeWatcher) Watch(controlContext context.Context, resultChan chan<- Nod
 		watchContext, killWatch := context.WithCancel(controlContext)
 		connectCtx, closeCtx := context.WithTimeout(watchContext, connectTimeout)
 
-		log.Debug("creating new client")
 		nodeClient, err := tclient.New(connectCtx, w.configOpts...)
 		if err != nil {
 			fmt.Printf("client error: %s\n", err.Error())
@@ -280,7 +280,6 @@ func (w NodeWatcher) Watch(controlContext context.Context, resultChan chan<- Nod
 					}
 
 					if bail {
-						log.Debug("killing watch")
 						killWatch()
 						conn.Close()
 						return
