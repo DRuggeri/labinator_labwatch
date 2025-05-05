@@ -19,12 +19,13 @@ type singlePortStatus struct {
 type PortStatus map[string]bool
 
 type PortWatcher struct {
+	trace              bool
 	endpoints          map[string]bool
 	internalStatusChan chan singlePortStatus
 	log                *slog.Logger
 }
 
-func NewPortWatcher(ctx context.Context, endpoints []string, log *slog.Logger) (*PortWatcher, error) {
+func NewPortWatcher(ctx context.Context, endpoints []string, trace bool, log *slog.Logger) (*PortWatcher, error) {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -36,6 +37,7 @@ func NewPortWatcher(ctx context.Context, endpoints []string, log *slog.Logger) (
 
 	return &PortWatcher{
 		endpoints:          e,
+		trace:              trace,
 		internalStatusChan: make(chan singlePortStatus),
 		log:                log.With("operation", "PortWatcher"),
 	}, nil
@@ -60,9 +62,15 @@ func (w *PortWatcher) Watch(controlContext context.Context, resultChan chan<- Po
 				var sleepyTime time.Duration
 				conn, err := net.DialTimeout("tcp", endpoint, time.Second)
 				if err != nil {
+					if w.trace {
+						w.log.Debug("port is down", "endpoint", endpoint)
+					}
 					up = false
 					sleepyTime = connectionCheckInterval
 				} else {
+					if w.trace {
+						w.log.Debug("port is up", "endpoint", endpoint)
+					}
 					up = true
 					conn.Close()
 					sleepyTime = recheckInterval

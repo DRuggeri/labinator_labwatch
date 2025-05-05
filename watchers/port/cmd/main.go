@@ -13,7 +13,7 @@ import (
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	w, err := port.NewPortWatcher(context.Background(), []string{"127.0.0.1:22", "127.0.0.1:3000", "127.0.0.1:8443"}, log)
+	w, err := port.NewPortWatcher(context.Background(), []string{"127.0.0.1:22", "127.0.0.1:3000", "127.0.0.1:8443"}, false, log)
 	if err != nil {
 		panic(err)
 	}
