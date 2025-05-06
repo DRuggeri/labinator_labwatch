@@ -246,10 +246,6 @@ func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
 		return ret
 	}
 
-	if w.trace {
-		w.log.Debug("trace", "payload", string(m))
-	}
-
 	for _, stream := range msg.Streams {
 		thisTs, _ := strconv.Atoi(stream.Values[0][0])
 		if thisTs > w.lastTs {
@@ -263,9 +259,15 @@ func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
 			Node:       stream.Stream["host_name"],
 			Service:    stream.Stream["service_name"],
 			Message:    stream.Stream["MESSAGE"],
-			Level:      stream.Stream["level"],
+			Level:      stream.Stream["severity_text"],
 			Attributes: stream.Stream,
 		}
+
+		if w.trace {
+			v, _ := json.Marshal(e)
+			w.log.Debug("trace", "payload", string(v))
+		}
+
 		ret = append(ret, e)
 	}
 	return ret
