@@ -28,7 +28,7 @@ type TalosInitializer struct {
 }
 
 type InitializerStatus struct {
-	Name                   string
+	LabName                string
 	NumHypervisors         int
 	InitializedHypervisors int
 	NumNodes               int
@@ -165,7 +165,7 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 		NumHypervisors: len(hypervisors),
 		NumNodes:       len(nodeNames),
 		CurrentStep:    "initializing",
-		Name:           scenario,
+		LabName:        scenario,
 	}
 	i.SendStatusUpdate(initStatus)
 
