@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Lab Status</title>
+</head>
+<body>
+    <h1>Lab Status</h1>
+
+    <div id="power">
+        <h3>Power</h3>
+        <span class="powerLabel">P1</span>:<span id="P1">0</span>
+        <span class="powerLabel">P2</span>:<span id="P2">0</span>
+        <span class="powerLabel">P3</span>:<span id="P3">0</span>
+        <span class="powerLabel">P4</span>:<span id="P4">0</span>
+        <span class="powerLabel">P5</span>:<span id="P5">0</span>
+        <span class="powerLabel">P6</span>:<span id="P6">0</span>
+        <span class="powerLabel">P7</span>:<span id="P7">0</span>
+        <span class="powerLabel">P8</span>:<span id="P8">0</span>
+    </div>
+
+    <div>
+        <h3>Network</h3>
+        <table>
+            <tr>
+                <th colspan="2">DHCP</th>
+                <th colspan="4">DNS</th>
+                <th colspan="2">WAN Drops</th>
+                <th colspan="2">LAN Drops</th>
+            </tr>
+            <tr>
+                <th>Disocver</th>
+                <th>Lease</th>
+                <th>Queries</th>
+                <th>Local</th>
+                <th>Recursions</th>
+                <th>Cached</th>
+                <th>In</th>
+                <th>Out</th>
+                <th>In</th>
+                <th>Out</th>
+            </tr>
+            <tr>
+                <td><span id="NumDHCPDiscover">0</span></td>
+                <td><span id="NumDHCPLeased">0</span></td>
+                <td><span id="NumDNSQueries">0</span></td>
+                <td><span id="NumDNSLocal">0</span></td>
+                <td><span id="NumDNSRecursions">0</span></td>
+                <td><span id="NumDNSCached">0</span></td>
+                <td><span id="NumFirewallWanInDrops">0</span></td>
+                <td><span id="NumFirewallWanOutDrops">0</span></td>
+                <td><span id="NumFirewallLanInDrops">0</span></td>
+                <td><span id="NumFirewallLanOutDrops">0</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <div>
+        <h3>Messages</h3>
+        <table>
+            <tr>
+                <th>Total</th>
+                <th>Emergency</th>
+                <th>Alert</th>
+                <th>Critical</th>
+                <th>Error</th>
+                <th>Warn</th>
+                <th>Notice</th>
+                <th>Info</th>
+                <th>Debug</th>
+            </tr>
+            <tr>
+                <td><span id="NumMessages">0</span></td>
+                <td><span id="NumEmergencyMessages">0</span></td>
+                <td><span id="NumAlertMessages">0</span></td>
+                <td><span id="NumCriticalMessages">0</span></td>
+                <td><span id="NumErrorMessages">0</span></td>
+                <td><span id="NumWarnMessages">0</span></td>
+                <td><span id="NumNoticeMessages">0</span></td>
+                <td><span id="NumInfoMessages">0</span></td>
+                <td><span id="NumDebugMessages">0</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="lab">
+        <h3>Lab</h3>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>CurrentStep</th>
+                <th>Hypervisors</th>
+                <th>Nodes</th>
+                <th>Pods</th>
+            </tr>
+            <tr>
+                <td><span id="LabName"></span></td>
+                <td><span id="CurrentStep">N/A</span></td>
+                <td><span id="InitializedHypervisors">0</span> / <span id="NumHypervisors">0</span></td>
+                <td><span id="InitializedNodes">0</span> / <span id="NumNodes">0</span></td>
+                <td><span id="InitializedPods">0</span> / <span id="NumPods">0</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        const socket = new WebSocket('ws://localhost:8080/status');
+
+        socket.onopen = () => {
+            console.log('Connected to labwatch status server');
+        };
+
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data)
+                for (const [k, v] of Object.entries(data['power'])) {
+                    const el = document.getElementById(k)
+                    if ( el != null ) {
+                        if ( v ) {
+                            el.innerHTML = "On"
+                            el.className = "powerOn"
+                        } else {
+                            el.innerHTML = "Off"
+                            el.className = "powerOf"
+                        }
+                    }
+                }
+
+                for (const [k, v] of Object.entries(data['logs'])) {
+                    const el = document.getElementById(k)
+                    if ( el != null ) {
+                        el.innerHTML = v
+                    }
+                }
+
+                for (const [k, v] of Object.entries(data['initializer'])) {
+                    const el = document.getElementById(k)
+                    if ( el != null ) {
+                        el.innerHTML = v
+                    }
+                }
+                document.getElementById('Endpoints').innerHTML = data['ports'].length
+            } catch (error) {
+                console.log("Failed parsing JSON from status server:", error)
+            }
+
+        };
+
+        socket.onclose = () => {
+            console.log('Disconnected from labwatch status server');
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+    </script>
+</body>
+</html>
