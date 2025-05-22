@@ -53,8 +53,10 @@ type LogStats struct {
 
 	NumFirewallWanInDrops  int
 	NumFirewallWanOutDrops int
+	NumFirewallWanDrops    int
 	NumFirewallLanInDrops  int
 	NumFirewallLanOutDrops int
+	NumFirewallLanDrops    int
 
 	IPXETalosChainload int
 }
@@ -318,12 +320,16 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 		} else if e.Node == "wally" && e.Service == "kernel" {
 			if strings.Contains(e.Message, "drop wan in") {
 				w.stats.NumFirewallWanInDrops++
+				w.stats.NumFirewallWanDrops++
 			} else if strings.Contains(e.Message, "drop wan out") {
 				w.stats.NumFirewallWanOutDrops++
+				w.stats.NumFirewallWanDrops++
 			} else if strings.Contains(e.Message, "drop lan in") {
 				w.stats.NumFirewallLanInDrops++
+				w.stats.NumFirewallLanDrops++
 			} else if strings.Contains(e.Message, "drop lan out") {
 				w.stats.NumFirewallLanOutDrops++
+				w.stats.NumFirewallLanDrops++
 			}
 
 		} else if strings.HasPrefix(e.Message, "Starting cert-renewer") {
