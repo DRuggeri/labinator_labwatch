@@ -17,6 +17,7 @@ import (
 
 	"github.com/DRuggeri/labwatch/browserhandler"
 	"github.com/DRuggeri/labwatch/powerman"
+	"github.com/DRuggeri/labwatch/statusinator"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/port"
@@ -46,21 +47,14 @@ type LabwatchConfig struct {
 	TalosScenarioConfig   string `yaml:"talos-scenario-config"`
 	TalosScenarioNodesDir string `yaml:"talos-scenario-nodes-directory"`
 	PowerManagerPort      string `yaml:"powermanager-port"`
+	StatusinatorPort      string `yaml:"statusinator-port"`
 	NetbootFolder         string `yaml:"netboot-folder"`
 	NetbootLink           string `yaml:"netboot-link"`
 	PortWatchTrace        bool   `yaml:"port-watch-trace"`
 }
 
-type LabStatus struct {
-	Initializer talosinitializer.InitializerStatus `json:"initializer"`
-	Talos       map[string]talos.NodeStatus        `json:"talos"`
-	Power       powerman.PowerStatus               `json:"power"`
-	Ports       port.PortStatus                    `json:"ports"`
-	Logs        loki.LogStats                      `json:"logs"`
-}
-
-var currentStatus = LabStatus{}
-var statusClients = map[string]chan<- LabStatus{}
+var currentStatus = statusinator.LabStatus{}
+var statusClients = map[string]chan<- statusinator.LabStatus{}
 var eventClients = map[string]chan<- loki.LogEvent{}
 var lock = &sync.Mutex{}
 
@@ -125,6 +119,17 @@ func main() {
 		log.Error("failed to create the power manager", "error", err.Error())
 		os.Exit(1)
 	}
+
+	statinator, err := statusinator.NewStatusinator(cfg.StatusinatorPort, log)
+	if err != nil {
+		log.Error("failed to create the power manager", "error", err.Error())
+		os.Exit(1)
+	}
+	statusinatorStatusChan := make(chan statusinator.LabStatus, 2)
+	addStatusClient("statusinator", statusinatorStatusChan)
+	statusinatorEventChan := make(chan loki.LogEvent, 5)
+	addEventClient("statusinator", statusinatorEventChan)
+	go statinator.Watch(context.Background(), statusinatorStatusChan, statusinatorEventChan)
 
 	watcherCancel, err := startWatchers(cfg, activeLab, pMan, nil, log)
 	if err != nil {
@@ -250,7 +255,7 @@ func main() {
 			return
 		}
 
-		thisChan := make(chan LabStatus)
+		thisChan := make(chan statusinator.LabStatus)
 		uuid := uuid.New().String()
 
 		addStatusClient(uuid, thisChan)
@@ -263,7 +268,7 @@ func main() {
 		}
 
 		for {
-			var status LabStatus
+			var status statusinator.LabStatus
 			select {
 			case <-r.Context().Done():
 				return
@@ -336,7 +341,7 @@ func startWatchers(cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, 
 	}
 
 	log.Debug("starting watchers", "endpoints", endpoints, "portchan", portBroadcast != nil)
-	status := LabStatus{}
+	status := statusinator.LabStatus{}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tInfo := make(chan map[string]talos.NodeStatus)
@@ -445,7 +450,7 @@ func startWatchers(cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, 
 	return cancel, nil
 }
 
-func addStatusClient(id string, ch chan<- LabStatus) {
+func addStatusClient(id string, ch chan<- statusinator.LabStatus) {
 	lock.Lock()
 	statusClients[id] = ch
 	lock.Unlock()
