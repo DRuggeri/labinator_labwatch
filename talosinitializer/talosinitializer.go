@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"gopkg.in/yaml.v3"
 )
@@ -81,11 +82,6 @@ func NewTalosInitializer(talosConfigFile string, scenarioConfigFile string, scen
 
 			nodeCfg.Name = name
 			nodeCfg.configFile = filepath.Join(scenarioNodesDir, scenarioName, fmt.Sprintf("node-%s.yaml", name))
-
-			//Ensure config file can be read
-			if _, err := os.ReadFile(nodeCfg.configFile); err != nil {
-				return nil, fmt.Errorf("failed to read config file for node %s: %w", nodeCfg.Name, err)
-			}
 		}
 	}
 
@@ -142,16 +138,20 @@ func (i *TalosInitializer) SendStatusUpdate(s InitializerStatus) {
 	}
 }
 
-func (i *TalosInitializer) Initialize(controlContext context.Context, scenario string) {
+func (i *TalosInitializer) Initialize(controlContext context.Context, scenario string, pMan *powerman.PowerManager) {
 	config, ok := i.scenarioConfig[scenario]
-	log := i.log.With("operation", fmt.Sprintf("TalosInitializer-%s", scenario))
+	log := i.log.With("scenario", scenario)
+
 	if !ok {
 		log.Error("scenario does not exist")
+		return
 	}
 
 	hypervisors, nodeNames := config.GetHypervisorsAndNodes()
 	nodeEndpointMap := map[string]NodeConfig{}
 	hypervisorEndpointMap := map[string]string{}
+
+	log.Info("initializing scenario", "numHypervisors", len(hypervisors), "numNodes", len(nodeNames))
 
 	for ip := range hypervisors {
 		hypervisorEndpointMap[fmt.Sprintf("%s:22", ip)] = ip
@@ -164,9 +164,24 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 	initStatus := InitializerStatus{
 		NumHypervisors: len(hypervisors),
 		NumNodes:       len(nodeNames),
-		CurrentStep:    "initializing",
+		CurrentStep:    "secret generation",
 		LabName:        scenario,
 	}
+	i.SendStatusUpdate(initStatus)
+
+	// Set up the configs
+	command := exec.CommandContext(controlContext, filepath.Join(i.nodesDir, scenario, "generate.sh"))
+	result, err := command.CombinedOutput()
+	log.Debug("run result", "command", command, "error", err, "output", string(result))
+	if err != nil {
+		log.Error("bootstrap failed", "output", string(result))
+		return
+	}
+
+	// Boot the boxes!
+	pMan.TurnOn(powerman.PALL)
+
+	initStatus.CurrentStep = "initializing"
 	i.SendStatusUpdate(initStatus)
 
 	log.Debug("entering initialization loop")

@@ -40,17 +40,17 @@ var (
 )
 
 type LabwatchConfig struct {
-	LokiAddress           string `yaml:"loki-address"`
-	LokiQuery             string `yaml:"loki-query"`
-	LokiTrace             bool   `yaml:"loki-trace"`
-	TalosConfigFile       string `yaml:"talos-config"`
-	TalosScenarioConfig   string `yaml:"talos-scenario-config"`
-	TalosScenarioNodesDir string `yaml:"talos-scenario-nodes-directory"`
-	PowerManagerPort      string `yaml:"powermanager-port"`
-	StatusinatorPort      string `yaml:"statusinator-port"`
-	NetbootFolder         string `yaml:"netboot-folder"`
-	NetbootLink           string `yaml:"netboot-link"`
-	PortWatchTrace        bool   `yaml:"port-watch-trace"`
+	LokiAddress         string `yaml:"loki-address"`
+	LokiQuery           string `yaml:"loki-query"`
+	LokiTrace           bool   `yaml:"loki-trace"`
+	TalosConfigFile     string `yaml:"talos-config"`
+	TalosScenarioConfig string `yaml:"talos-scenario-config"`
+	TalosScenariosDir   string `yaml:"talos-scenarios-directory"`
+	PowerManagerPort    string `yaml:"powermanager-port"`
+	StatusinatorPort    string `yaml:"statusinator-port"`
+	NetbootFolder       string `yaml:"netboot-folder"`
+	NetbootLink         string `yaml:"netboot-link"`
+	PortWatchTrace      bool   `yaml:"port-watch-trace"`
 }
 
 var currentStatus = statusinator.LabStatus{}
@@ -81,16 +81,17 @@ func main() {
 	log.Info("starting up labwatch", "version", Version)
 
 	cfg := LabwatchConfig{
-		LokiAddress:           "boss.local:3100",
-		LokiQuery:             `{ host_name =~ ".+" } | json`,
-		LokiTrace:             false,
-		TalosConfigFile:       "/home/boss/talos/talosconfig",
-		PowerManagerPort:      "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
-		NetbootFolder:         "/var/www/html/nodes-ipxe/",
-		NetbootLink:           "lab",
-		TalosScenarioConfig:   "/home/boss/talos/scenarios/configs.yaml",
-		TalosScenarioNodesDir: "/home/boss/talos/scenarios",
-		PortWatchTrace:        false,
+		LokiAddress:         "boss.local:3100",
+		LokiQuery:           `{ host_name =~ ".+" } | json`,
+		LokiTrace:           false,
+		TalosConfigFile:     "/home/boss/.talos/config",
+		PowerManagerPort:    "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
+		StatusinatorPort:    "/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:3D:AE:E9:29:08-if00",
+		NetbootFolder:       "/var/www/html/nodes-ipxe/",
+		NetbootLink:         "lab",
+		TalosScenarioConfig: "/home/boss/talos/scenarios/configs.yaml",
+		TalosScenariosDir:   "/home/boss/talos/scenarios",
+		PortWatchTrace:      false,
 	}
 
 	if *config != "" {
@@ -108,7 +109,7 @@ func main() {
 
 	var initializerCtx context.Context
 	var initializerCancel context.CancelFunc
-	initializer, err := talosinitializer.NewTalosInitializer(cfg.TalosConfigFile, cfg.TalosScenarioConfig, cfg.TalosScenarioNodesDir, "koob", log)
+	initializer, err := talosinitializer.NewTalosInitializer(cfg.TalosConfigFile, cfg.TalosScenarioConfig, cfg.TalosScenariosDir, "koob", log)
 	if err != nil {
 		log.Error("failed to create the Talos initializer", "error", err.Error())
 		os.Exit(1)
@@ -198,14 +199,24 @@ func main() {
 
 		activeLab = lab
 
-		log.Info("configuring lab", "lab", activeLab)
+		log.Info("configuring lab", "lab", activeLab, "numWatchEndpoints", len(endpoints))
 		os.Remove(filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
 		os.Symlink(filepath.Join(cfg.NetbootFolder, activeLab), filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
-		pMan.Restart(powerman.PALL)
+
+		// Ensure boxes are down
+		pMan.TurnOff(powerman.PALL)
+		// Wait for all to be off
+		for {
+			if pMan.PortIsOff(powerman.PALL) {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+
 		resetWatchers()
 
 		initializerCtx, initializerCancel = context.WithCancel(context.Background())
-		go initializer.Initialize(initializerCtx, lab)
+		go initializer.Initialize(initializerCtx, lab, pMan)
 	})
 
 	http.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {

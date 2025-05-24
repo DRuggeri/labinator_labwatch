@@ -27,7 +27,7 @@ func main() {
 	time.Sleep(2 * time.Second)
 
 	activeLab := "virtual-2"
-	initializer, err := talosinitializer.NewTalosInitializer("/home/boss/talos/talosconfig", "/home/boss/talos/scenarios/configs.yaml", "/home/boss/talos/scenarios", "koob", log)
+	initializer, err := talosinitializer.NewTalosInitializer("/home/boss/.talos/config", "/home/boss/talos/scenarios/configs.yaml", "/home/boss/talos/scenarios", "koob", log)
 	if err != nil {
 		panic(err)
 	}
@@ -43,7 +43,15 @@ func main() {
 	log.Info("configuring lab", "lab", activeLab)
 	os.Remove(filepath.Join("/var/www/html/nodes-ipxe/", "lab"))
 	os.Symlink(filepath.Join("/var/www/html/nodes-ipxe/", activeLab), filepath.Join("/var/www/html/nodes-ipxe/", "lab"))
-	pMan.Restart(powerman.PALL)
+	// Ensure boxes are down
+	pMan.TurnOff(powerman.PALL)
+	// Wait for all to be off
+	for {
+		if pMan.PortIsOff(powerman.PALL) {
+			break
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
 
 	portWatcher, err := port.NewPortWatcher(ctx, activeEndpoints, false, log)
 	if err != nil {
@@ -57,7 +65,7 @@ func main() {
 
 	initializerCtx, initializerCancel := context.WithCancel(ctx)
 	defer initializerCancel()
-	go initializer.Initialize(initializerCtx, activeLab)
+	go initializer.Initialize(initializerCtx, activeLab, pMan)
 
 OUTER:
 	for {
