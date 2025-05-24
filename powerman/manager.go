@@ -167,11 +167,52 @@ func (m *PowerManager) updateStatus() error {
 		P7: res[6],
 		P8: res[7],
 	}
+	//m.log.Debug("status reset", "P1", m.status.P1, "P2", m.status.P2, "P3", m.status.P3, "P4", m.status.P4, "P5", m.status.P5, "P6", m.status.P6, "P7", m.status.P7, "P8", m.status.P8)
 	return nil
 }
 
 func (m *PowerManager) GetStatus() PowerStatus {
 	return m.status
+}
+
+func (m *PowerManager) PortIsOn(i Port) bool {
+	// Ignore bunk inputs
+	if !i.IsValid() {
+		m.log.Warn("bunk port provided - ignoring", "port", i)
+		return false
+	}
+
+	ports := []Port{i}
+	if i == PALL {
+		ports = ALL_PORTS
+	}
+
+	for _, p := range ports {
+		if !m.GetPortStatus(p) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *PowerManager) PortIsOff(i Port) bool {
+	// Ignore bunk inputs
+	if !i.IsValid() {
+		m.log.Warn("bunk port provided - ignoring", "port", i)
+		return false
+	}
+
+	ports := []Port{i}
+	if i == PALL {
+		ports = ALL_PORTS
+	}
+
+	for _, p := range ports {
+		if m.GetPortStatus(p) {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *PowerManager) TurnOn(i Port) error {
@@ -222,7 +263,7 @@ func (m *PowerManager) TurnOff(i Port) error {
 	for _, p := range ports {
 		m.log.Debug(fmt.Sprintf("turning off port %v", p), "current", m.GetPortStatus(p))
 
-		if !m.GetPortStatus(i) {
+		if !m.GetPortStatus(p) {
 			// Already off
 			continue
 		}
