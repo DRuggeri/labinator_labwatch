@@ -152,6 +152,11 @@ func (m *PowerManager) updateStatus() error {
 
 	res := make([]bool, 8)
 	parts := strings.Split(line, " ")
+	if len(parts) != 9 {
+		m.log.Warn("incorrect status response detected", "line", line)
+		return nil
+	}
+
 	for i := 1; i <= 8; i++ {
 		if parts[i] == "1" {
 			res[i-1] = true
