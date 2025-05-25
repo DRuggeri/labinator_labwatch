@@ -102,6 +102,7 @@ func (m *Statusinator) send(t string, payload []byte) {
 
 	_, err := m.port.Write(b)
 	if err != nil {
+		m.port.Close()
 		p, oerr := serial.Open(m.opts)
 		if oerr != nil {
 			m.log.Warn("error writing to port - failed to reopen", "error", err, "openError", oerr)
