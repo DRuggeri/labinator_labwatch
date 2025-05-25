@@ -96,6 +96,7 @@
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=5s');">Boss</a><br />
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/k8s_views_global/kubernetes-views-global?kiosk=true&orgId=1&from=now-1h&to=now&timezone=browser&var-datasource=prometheus&var-cluster=&var-resolution=30s&refresh=30s')">Kubernetes</a><br />
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/logs/logs?kiosk=&orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s')">Logs</a><br />
+					<a onclick="navigateBottomWindow('http://boss.local:8080/status.html')">Lab Status</a><br />
 				</section>
 				<section id="system" data-name="System">
 					<a onclick="sendThenSlide('/system?action=restart', 'chaos');">Restart the Lab</a><br />

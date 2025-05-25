@@ -5,6 +5,9 @@
 </head>
 <body>
     <h1>Lab Status</h1>
+    <div id="overview">
+        Status Events: <span id="receivedEvents"></span>
+    </div>
 
     <div id="power">
         <h3>Power</h3>
@@ -104,12 +107,14 @@
 
     <script>
         const socket = new WebSocket('ws://localhost:8080/status');
+        receivedEvents = 0
 
         socket.onopen = () => {
             console.log('Connected to labwatch status server');
         };
 
         socket.onmessage = (event) => {
+            document.getElementById("receivedEvents").innerHTML = receivedEvents++
             try {
                 const data = JSON.parse(event.data)
                 for (const [k, v] of Object.entries(data['power'])) {
@@ -138,7 +143,7 @@
                         el.innerHTML = v
                     }
                 }
-                document.getElementById('Endpoints').innerHTML = data['ports'].length
+                //document.getElementById('Endpoints').innerHTML = data['ports'].length
             } catch (error) {
                 console.log("Failed parsing JSON from status server:", error)
             }
