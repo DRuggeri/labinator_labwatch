@@ -138,8 +138,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("watchers initialized")
-
 	u := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -457,6 +455,7 @@ func startWatchers(cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, 
 			}
 		}
 	}()
+	log.Info("watchers started", "iInfo", iInfo)
 
 	return cancel, nil
 }
