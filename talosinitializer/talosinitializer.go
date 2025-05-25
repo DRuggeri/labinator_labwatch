@@ -37,6 +37,7 @@ type InitializerStatus struct {
 	NumPods                int
 	InitializedPods        int
 	CurrentStep            string
+	Failed                 bool
 }
 
 type ScenarioConfig struct {
@@ -97,7 +98,7 @@ func NewTalosInitializer(talosConfigFile string, scenarioConfigFile string, scen
 		nodesDir:       scenarioNodesDir,
 		k8sContext:     k8sContext,
 		log:            log.With("operation", "TalosInitializer"),
-		portStatuses:   make(chan port.PortStatus),
+		portStatuses:   make(chan port.PortStatus, 5),
 		statusChan:     make(chan InitializerStatus, 5),
 	}, nil
 }
@@ -134,7 +135,7 @@ func (i *TalosInitializer) SendStatusUpdate(s InitializerStatus) {
 	case i.statusChan <- s:
 	default:
 		// No listeners - avoid blocking
-		i.log.Debug("discarding status update - would block")
+		i.log.Debug("discarding status update - would block", "len", len(i.statusChan), "cap", cap(i.statusChan))
 	}
 }
 
@@ -153,6 +154,16 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 
 	log.Info("initializing scenario", "numHypervisors", len(hypervisors), "numNodes", len(nodeNames))
 
+	// Drain any port updates on the chan to start fresh
+DRAIN:
+	for {
+		select {
+		case <-i.portStatuses:
+		default:
+			break DRAIN
+		}
+	}
+
 	for ip := range hypervisors {
 		hypervisorEndpointMap[fmt.Sprintf("%s:22", ip)] = ip
 	}
@@ -164,9 +175,10 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 	initStatus := InitializerStatus{
 		NumHypervisors: len(hypervisors),
 		NumNodes:       len(nodeNames),
-		CurrentStep:    "secret generation",
+		CurrentStep:    "secrets gen",
 		LabName:        scenario,
 	}
+	log.Info("initialization state updated", "step", initStatus.CurrentStep)
 	i.SendStatusUpdate(initStatus)
 
 	// Set up the configs
@@ -175,13 +187,19 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 	log.Debug("run result", "command", command, "error", err, "output", string(result))
 	if err != nil {
 		log.Error("bootstrap failed", "output", string(result))
+		initStatus.Failed = true
+		i.SendStatusUpdate(initStatus)
 		return
 	}
 
 	// Boot the boxes!
+	initStatus.CurrentStep = "powerup"
+	log.Info("initialization state updated", "step", initStatus.CurrentStep)
+	i.SendStatusUpdate(initStatus)
 	pMan.TurnOn(powerman.PALL)
 
-	initStatus.CurrentStep = "initializing"
+	initStatus.CurrentStep = "booting"
+	log.Info("initialization state updated", "step", initStatus.CurrentStep)
 	i.SendStatusUpdate(initStatus)
 
 	log.Debug("entering initialization loop")
@@ -232,6 +250,7 @@ INITLOOP:
 			if len(hypervisorEndpointMap) == 0 && len(nodeEndpointMap) == 0 {
 				break INITLOOP
 			}
+			initStatus.CurrentStep = "bootloop"
 			i.SendStatusUpdate(initStatus)
 		default:
 			// Not cancelled and no port updates - emit a status update for debug?
@@ -267,6 +286,7 @@ INITLOOP:
 	for name, node := range config.Nodes {
 		if node.Role == "controlplane" {
 			initStatus.CurrentStep = "bootstrapping"
+			log.Info("initialization state updated", "step", initStatus.CurrentStep)
 			i.SendStatusUpdate(initStatus)
 			log.Info("bootstrapping Kubernetes through control plane node", "node", name)
 			BootstrapCluster(controlContext, i.talosConfig, node.IP, scenario, i.k8sContext, log)
@@ -275,14 +295,17 @@ INITLOOP:
 	}
 
 	initStatus.CurrentStep = "finalizing"
+	log.Info("initialization state updated", "step", initStatus.CurrentStep)
 	i.SendStatusUpdate(initStatus)
 	FinalizeInstall(controlContext, log)
 
 	initStatus.CurrentStep = "starting"
+	log.Info("initialization state updated", "step", initStatus.CurrentStep)
 	i.SendStatusUpdate(initStatus)
 	i.awaitPods(controlContext, &initStatus, log)
 
 	initStatus.CurrentStep = "done"
+	log.Info("initialization state updated", "step", initStatus.CurrentStep)
 	i.SendStatusUpdate(initStatus)
 	log.Info("initialization complete")
 }
