@@ -58,6 +58,7 @@ type PowerManager struct {
 	opts    serial.OpenOptions
 	port    io.ReadWriteCloser
 	log     *slog.Logger
+	ts      time.Time
 	status  PowerStatus
 	running bool
 }
@@ -101,11 +102,26 @@ func (m *PowerManager) Stop() {
 
 func (m *PowerManager) internalWatch() {
 	for m.running {
+		reconnect := false
 		err := m.updateStatus()
 		if err != nil {
 			m.log.Error("failed to update status", "error", err.Error())
+			reconnect = true
 		}
 
+		if time.Now().After(m.ts.Add(5 * time.Second)) {
+			m.log.Warn("no status update detected in over 5 seconds - reconnecting", "error", err.Error())
+			reconnect = true
+		}
+
+		if reconnect {
+			p, err := serial.Open(m.opts)
+			if err != nil {
+				m.log.Error("failed to reconnect to relayinator", "error", err.Error())
+			} else {
+				m.port = p
+			}
+		}
 		time.Sleep(sleepDuration)
 	}
 }
@@ -172,6 +188,7 @@ func (m *PowerManager) updateStatus() error {
 		P7: res[6],
 		P8: res[7],
 	}
+	m.ts = time.Now()
 	//m.log.Debug("status reset", "P1", m.status.P1, "P2", m.status.P2, "P3", m.status.P3, "P4", m.status.P4, "P5", m.status.P5, "P6", m.status.P6, "P7", m.status.P7, "P8", m.status.P8)
 	return nil
 }
