@@ -25,7 +25,7 @@ function gotoSlide(target) {
     }
 }
 
-function navigateBottomWindow(url) {
+async function navigateBottomWindow(url) {
     const target = encodeURIComponent(url)
-    backgroundSend(`http://boss.local:8080/navigate?url=${target}`)
+    await backgroundSend(`http://boss.local:8080/navigate?url=${target}`)
 }
