@@ -7,7 +7,6 @@ import (
 	"log"
 	"log/slog"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -58,7 +57,8 @@ type LogStats struct {
 	NumFirewallLanOutDrops int
 	NumFirewallLanDrops    int
 
-	IPXETalosChainload int
+	NumPhysicalPXEBoots int
+	NumVirtualPXEBoots  int
 }
 
 type LokiWatcherConfig struct {
@@ -68,7 +68,6 @@ type LokiWatcherConfig struct {
 type LokiWatcher struct {
 	url              url.URL
 	trace            bool
-	lastTs           int
 	internalLogChan  chan LogEvent
 	internalStatChan chan LogStats
 	stats            LogStats
@@ -85,6 +84,7 @@ func NewLokiWatcher(ctx context.Context, addr string, query string, trace bool, 
 
 	q := url.Values{}
 	q.Set("limit", "9999")
+	q.Set("start", fmt.Sprintf("%d", time.Now().UnixNano()))
 	q.Set("query", query)
 
 	return &LokiWatcher{
@@ -97,7 +97,6 @@ func NewLokiWatcher(ctx context.Context, addr string, query string, trace bool, 
 		trace:            trace,
 		internalLogChan:  make(chan LogEvent),
 		internalStatChan: make(chan LogStats),
-		lastTs:           int(time.Now().UnixMicro()) * 1000,
 		log:              log.With("operation", "LokiWatcher"),
 	}, nil
 }
@@ -210,7 +209,7 @@ func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- Log
 		},
 	    {
 	      "stream": {
-	        "MESSAGE": "dnsmasq: query[A] google.com from 192.168.122.3",
+	        "message": "dnsmasq: query[A] google.com from 192.168.122.3",
 	        "PRIORITY": "6",
 	        "SYSLOG_IDENTIFIER": "dnsmasq",
 	        "detected_level": "info",
@@ -249,18 +248,10 @@ func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
 	}
 
 	for _, stream := range msg.Streams {
-		thisTs, _ := strconv.Atoi(stream.Values[0][0])
-		if thisTs > w.lastTs {
-			w.lastTs = thisTs
-		} else {
-			continue
-		}
-
-		// This message is newer than the last batch of messages
 		e := LogEvent{
 			Node:       stream.Stream["host_name"],
 			Service:    stream.Stream["service_name"],
-			Message:    stream.Stream["MESSAGE"],
+			Message:    stream.Stream["message"],
 			Level:      stream.Stream["severity_text"],
 			Attributes: stream.Stream,
 		}
@@ -304,7 +295,7 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 			if strings.HasPrefix(e.Message, "dnsmasq-dhcp:") {
 				if strings.Contains(e.Message, "DHCPDISCOVER") {
 					w.stats.NumDHCPDiscover++
-				} else if strings.Contains(e.Message, "DHCPACK") {
+				} else if strings.Contains(e.Message, "DHCPOFFER") {
 					w.stats.NumDHCPLeased++
 				}
 			} else if strings.HasPrefix(e.Message, "query") {
@@ -342,9 +333,11 @@ func (w *LokiWatcher) updateStats(events []LogEvent) {
 			w.stats.NumCertRenewed++
 		}
 
-		if e.Service == "apache2.service" {
-			if strings.Contains(e.Message, "GET /talos-boot.ipxe") {
-				w.stats.IPXETalosChainload++
+		if e.Service == "apache2" {
+			if strings.Contains(e.Attributes["uri"], "/nodes-ipxe/lab/16") {
+				w.stats.NumPhysicalPXEBoots++
+			} else if strings.Contains(e.Attributes["uri"], "/nodes-ipxe/lab/de") {
+				w.stats.NumVirtualPXEBoots++
 			}
 		}
 	}
