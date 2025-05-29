@@ -1,7 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Lab Status</title>
+    <title>Lab Status</title>
+    <style>
+        body {
+            font-family: Source Sans Pro, Helvetica, sans-serif;
+            background-color: #191919;
+            color: #ffffff;
+        }
+        h1 h2 h3 h4 h5 {
+            color: #ffffff;
+        }
+        td, th {
+            border: 1px solid #686868;
+            padding: 1px 5px 1px 5px;
+        }
+        table {
+            border-collapse: collapse;
+        }
+    </style>
 </head>
 <body>
     <h1>Lab Status</h1>
@@ -21,7 +38,7 @@
         <span class="powerLabel">P8</span>:<span id="P8">0</span>
     </div>
 
-    <div>
+    <div id="network">
         <h3>Network</h3>
         <table>
             <tr>
@@ -57,7 +74,7 @@
         </table>
     </div>
 
-    <div>
+    <div id="messages">
         <h3>Messages</h3>
         <table>
             <tr>
@@ -91,6 +108,8 @@
             <tr>
                 <th>Name</th>
                 <th>CurrentStep</th>
+                <th>Booting Physical</th>
+                <th>Booting Virtual</th>
                 <th>Hypervisors</th>
                 <th>Nodes</th>
                 <th>Pods</th>
@@ -98,6 +117,8 @@
             <tr>
                 <td><span id="LabName"></span></td>
                 <td><span id="CurrentStep">N/A</span></td>
+                <td><span id="NumPhysicalPXEBoots">0</span></td>
+                <td><span id="NumVirtualPXEBoots">0</span></td>
                 <td><span id="InitializedHypervisors">0</span> / <span id="NumHypervisors">0</span></td>
                 <td><span id="InitializedNodes">0</span> / <span id="NumNodes">0</span></td>
                 <td><span id="InitializedPods">0</span> / <span id="NumPods">0</span></td>
