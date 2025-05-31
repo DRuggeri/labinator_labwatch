@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
+	"github.com/DRuggeri/labwatch/wm"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -131,6 +134,12 @@ func main() {
 	statusinatorEventChan := make(chan loki.LogEvent, 5)
 	addEventClient("statusinator", statusinatorEventChan)
 	go statinator.Watch(context.Background(), statusinatorStatusChan, statusinatorEventChan)
+
+	wMan := wm.NewWindowsManager(context.Background(), log)
+	if err != nil {
+		log.Error("failed to create the windows manager", "error", err.Error())
+		os.Exit(1)
+	}
 
 	watcherCancel, err := startWatchers(cfg, activeLab, pMan, nil, log)
 	if err != nil {
@@ -317,7 +326,44 @@ func main() {
 	})
 
 	browserHandler, _ := browserhandler.NewBrowserHandler(log)
-	http.Handle("/navigate", browserHandler)
+	http.HandleFunc("/navigate", func(w http.ResponseWriter, r *http.Request) {
+		wMan.Kill(wm.WMScreenBottom)
+		browserHandler.ServeHTTP(w, r)
+	})
+
+	http.HandleFunc("/launch", func(w http.ResponseWriter, r *http.Request) {
+		command := strings.ToLower(r.URL.Query().Get("command"))
+		var cmd *exec.Cmd
+
+		switch command {
+		case "htop":
+			cmd = exec.Command("lxterminal", "--command", `htop`)
+		case "top":
+			cmd = exec.Command("lxterminal", "--command", `top -d 1`)
+		case "journal":
+			cmd = exec.Command("lxterminal", "--command", `journalctl -q -f`)
+		case "apache":
+			cmd = exec.Command("lxterminal", "--command", `tail -F /var/log/apache2/other_vhosts_access.log`)
+		case "tcpdump":
+			cmd = exec.Command("lxterminal", "--command", `sudo tcpdump -n`)
+		case "loki":
+			cmd = exec.Command("lxterminal", "--command", `bash -c 'LOKI_ADDR=https://boss.local:3100 logcli-linux-amd64 query --output=jsonl -f "{ host_name =~ \".+\" } | json "'`)
+		case "vnc":
+			node, _ := strconv.Atoi(r.URL.Query().Get("node"))
+			vm, _ := strconv.Atoi(r.URL.Query().Get("vm"))
+			if node < 1 || node > 6 || vm < 1 || vm > 9 {
+				log.Info("bunk node and vm provided", "node", node, "vm", vm)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			cmd = exec.Command("xtightvncviewer", fmt.Sprintf("node%d.local::590%d", node, vm))
+		default:
+			log.Info("request command not defined", "command", command)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		wMan.StartWindow(context.Background(), cmd, wm.WMScreenBottom)
+	})
 
 	fsys, err := fs.Sub(siteFS, "site")
 	if err != nil {
