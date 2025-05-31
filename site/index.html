@@ -13,6 +13,9 @@
 		:root {
 			--r-main-font-size: 75px;
 		}
+		a:hover {
+			cursor:pointer;
+		}
 		.small {
 			font-size: 50px;
 		}
@@ -23,7 +26,7 @@
 			gap: .5em !important;
 			flex-wrap: unset !important;
 		}
-		.launchImage {
+		.actionImage {
 			position: fixed;
 			width: 100vw;
 			height: 100vh;
@@ -37,7 +40,7 @@
 		async function startLab(name) {
 			i = document.createElement('img')
 			i.src = 'assets/launch2.gif'
-			i.className = 'launchImage'
+			i.className = 'actionImage'
 			document.body.appendChild(i)
 
 			const ok = await backgroundSend(`/setlab?lab=${name}`)
@@ -107,10 +110,64 @@
 					</section>
 				</section>
 				<section id="observe" data-name="Observe">
-					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=5s');">Boss</a><br />
+					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=30s');">Boss</a><br />
+					<a href="#/bosssystem">Boss - System</a><br />
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/k8s_views_global/kubernetes-views-global?kiosk=true&orgId=1&from=now-1h&to=now&timezone=browser&var-datasource=prometheus&var-cluster=&var-resolution=30s&refresh=30s')">Kubernetes</a><br />
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/logs/logs?kiosk=&orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s')">Logs</a><br />
 					<a onclick="navigateBottomWindow('http://boss.local:8080/status.html')">Lab Status</a><br />
+					<a href="#/vmvnc">VM Screens</a><br />
+				</section>
+				<section id="bosssystem">
+					<a onclick="sendThenSlide('/launch?command=htop', 'observe');">htop</a><br />
+					<a onclick="sendThenSlide('/launch?command=top', 'observe');">ttop</a><br />
+					<a onclick="sendThenSlide('/launch?command=tcpdump', 'observe');">tcpdump</a><br />
+					<a onclick="sendThenSlide('/launch?command=journal', 'observe');">system journal</a><br />
+					<a onclick="sendThenSlide('/launch?command=apache', 'observe');">Apache access log</a><br />
+				</section>
+				<section id="vmvnc">
+					<table style="font-size:.5em;">
+						<tr>
+							<th>Node1</th>
+							<th>Node2</th>
+							<th>Node3</th>
+							<th>Node4</th>
+							<th>Node5</th>
+							<th>Node6</th>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=1', 'observe');">VM1</a><br /></td>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=2', 'observe');">VM2</a><br /></td>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=3', 'observe');">VM3</a><br /></td>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=4', 'observe');">VM4</a><br /></td>
+						</tr>
+					</table>
+					<p style="font-size:.45em;width: var(--slide-width);padding-top:1.5em;">NOTE: These are all possible VMs. If the current lab does not have a VM running yet or will not start a VM, nothing will happen when trying to view the VM's output</p>
 				</section>
 				<section id="system" data-name="System">
 					<a onclick="sendThenSlide('/system?action=restart', 'chaos');">Restart the Lab</a><br />
