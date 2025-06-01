@@ -400,14 +400,16 @@ func startWatchers(cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tInfo := make(chan map[string]talos.NodeStatus)
-	if lab != "" {
-		tWatcher, err := talos.NewTalosWatcher(ctx, cfg.TalosConfigFile, lab, log)
-		if err != nil {
-			cancel()
-			return nil, err
+	/*
+		if lab != "" {
+			tWatcher, err := talos.NewTalosWatcher(ctx, cfg.TalosConfigFile, lab, log)
+			if err != nil {
+				cancel()
+				return nil, err
+			}
+			go tWatcher.Watch(ctx, tInfo)
 		}
-		go tWatcher.Watch(ctx, tInfo)
-	}
+	*/
 
 	lWatcher, err := loki.NewLokiWatcher(ctx, cfg.LokiAddress, cfg.LokiQuery, cfg.LokiTrace, log)
 	if err != nil {
