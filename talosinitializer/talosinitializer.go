@@ -315,11 +315,20 @@ INITLOOP:
 		}
 	}
 
+	// Start watching pods as soon as we can run kubectl
+	podWatchCtx, podWatchCancel := context.WithCancel(controlContext)
+	go i.watchPods(podWatchCtx, initStatus, log)
+
+	// Install additional stuff
 	i.updateStep(initStatus, "finalizing", log)
 	FinalizeInstall(controlContext, log)
 
 	i.updateStep(initStatus, "starting", log)
-	i.awaitPods(controlContext, initStatus, log)
+	log.Info("awaiting pod starts")
+	for initStatus.NumPods != 0 && initStatus.NumPods != initStatus.InitializedPods {
+		time.Sleep(100 * time.Millisecond)
+	}
+	podWatchCancel()
 
 	i.updateStep(initStatus, "done", log)
 	log.Info("initialization complete")
@@ -451,21 +460,19 @@ func FinalizeInstall(ctx context.Context, log *slog.Logger) {
 	}
 }
 
-func (i *TalosInitializer) awaitPods(ctx context.Context, initStatus *InitializerStatus, log *slog.Logger) {
-	log.Info("awaiting pod starts")
-	lastStatus := 0
+func (i *TalosInitializer) watchPods(ctx context.Context, initStatus *InitializerStatus, log *slog.Logger) {
+	lastNumPods := 0
+	lastInitializedPods := 0
 
-	waitingPods := 100
-	for waitingPods > 0 {
+	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
 
-		waitingPods = 0
-		initStatus.NumPods = 0
-		initStatus.InitializedPods = 0
+		numPods := 0
+		initializedPods := 0
 
 		command := exec.Command("kubectl",
 			"get", "pods", "--all-namespaces", "--no-headers",
@@ -478,7 +485,6 @@ func (i *TalosInitializer) awaitPods(ctx context.Context, initStatus *Initialize
 			return
 		}
 
-		waitingPods = 0
 		for _, line := range strings.Split(string(result), "\n") {
 			if line == "" {
 				continue
@@ -489,21 +495,22 @@ func (i *TalosInitializer) awaitPods(ctx context.Context, initStatus *Initialize
 				log.Error("failed to extract information from line", "line", line)
 				return
 			}
-			initStatus.NumPods++
+			numPods++
 			if matches[2] == "Running" {
-				initStatus.InitializedPods++
-			} else {
-				waitingPods++
+				initializedPods++
 			}
 		}
 
 		log.Debug("pod progress", "total", initStatus.NumPods, "done", initStatus.InitializedPods)
-		if initStatus.NumPods != lastStatus {
+		if numPods != lastNumPods || initializedPods != lastInitializedPods {
+			initStatus.NumPods = numPods
+			initStatus.InitializedPods = initializedPods
 			i.sendStatusUpdate(*initStatus)
 		}
 
-		if waitingPods != 0 {
-			time.Sleep(time.Second)
-		}
+		lastNumPods = initStatus.NumPods
+		lastInitializedPods = initStatus.InitializedPods
+
+		time.Sleep(time.Second)
 	}
 }
