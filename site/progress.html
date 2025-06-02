@@ -72,7 +72,7 @@
                     <p class="fragment singular" data-autoslide="5000">They are valid only for a short period of time</p>
                     <p class="fragment singular" data-autoslide="5000">Labinator is slow, so it can take a while</p>
                     <p class="fragment singular" data-autoslide="5000">A cluster could need more than 70 keys</p>
-                    <p class="fragment singular">The tokens are useless after 24 hours</p>
+                    <p class="fragment singular" data-autoslide="99990000">The tokens are useless after 24 hours</p>
                 </section>
                 <section id="powerup">
                     <h3>Power Is On!</h3>
@@ -83,53 +83,67 @@
                     <p class="fragment" data-autoslide="5000">To run the VMs, we are starting <span id="NumHypervisors">0</span> hypervisors</p>
                     <p class="fragment" data-autoslide="5000" style="font-size: .75em">(<span id="NumPhysicalPXEBoots">0</span> have started booting, and <span id="InitializedHypervisors">0</span> are up)</p>
                     <p class="fragment">&nbsp;</p>
-                    <p class="fragment singular" data-autoslide="10000">Starting hypervisors can take some time</p>
+                    <p class="fragment singular" data-autoslide="5000">Starting hypervisors can take some time</p>
                     <p class="fragment singular" data-autoslide="5000">They pull their disk image from Boss</p>
                     <p class="fragment singular" data-autoslide="5000">The OS image is only about 300Mb in size</p>
-                    <p class="fragment singular" data-autoslide="10000">It can be slow because of PXE drivers</p>
+                    <p class="fragment singular" data-autoslide="5000">It can be slow because of the netboot process</p>
+                    <!-- 30s initialization complete -->
+                    <p class="fragment singular" data-autoslide="5000">Initial PXE boot should be about done now</p>
+                    <p class="fragment singular" data-autoslide="5000">We then chainload with iPXE</p>
+                    <p class="fragment singular" data-autoslide="5000">This is nice because iPXE is more flexible</p>
+                    <p class="fragment singular" data-autoslide="5000">iPXE takes a bit of time to finish init</p>
+                    <p class="fragment singular" data-autoslide="5000">There is probably a setting that can change</p>
+                    <p class="fragment singular" data-autoslide="5000">Or maybe it's from lame Realtek NIC drivers</p>
+                    <!-- 30s initialization complete -->
                     <p class="fragment singular" data-autoslide="5000">Bare metal config is fetched from network</p>
-                    <p class="fragment singular" data-autoslide="10000">This makes the nodes very flexible</p>
+                    <p class="fragment singular" data-autoslide="5000">This makes the nodes very flexible</p>
                     <p class="fragment singular" data-autoslide="5000">No state is stored on the hypervisors</p>
                     <p class="fragment singular" data-autoslide="5000">In fact, the OS image is a "live" image</p>
                     <p class="fragment singular" data-autoslide="5000">Disks are wiped on boot, too</p>
                     <p class="fragment singular" data-autoslide="5000">They can be cycled at any time</p>
                     <p class="fragment singular" data-autoslide="5000">This flexibility is important</p>
                     <p class="fragment singular" data-autoslide="5000">A machine could be a hypervisor</p>
-                    <p class="fragment singular" data-autoslide="10000">... or a baremetal Talos node!</p>
+                    <p class="fragment singular" data-autoslide="5000">... or a baremetal Talos node!</p>
                     <p class="fragment singular" data-autoslide="5000">Note that the "live" image is not optimized</p>
                     <p class="fragment singular" data-autoslide="5000">Some unneeded services are included</p>
                     <p class="fragment singular" data-autoslide="5000">It's OK - this is just a lab</p>
                     <p class="fragment singular" data-autoslide="5000">The hypervisors are ready immediately at boot</p>
                     <p class="fragment singular" data-autoslide="5000">Talos VM disk images are pulled in advance</p>
-                    <p class="fragment singular" data-autoslide="5000">You should see them pulling now</p>
                     <p class="fragment singular" data-autoslide="5000">Labwatch will start VMs on the hypervisors</p>
-                    <p class="fragment singular">Hypervisors should be up soon</p>
+                    <p class="fragment singular" data-autoslide="99990000">Hypervisors should be up soon</p>
                 </section>
                 <section id="booting-nodes" data-autoslide="50">
                     <h3>Booting Nodes</h3>
                     <p class="fragment" data-autoslide="5000"><span id="LabName" style="font-family: Courier New, monospace">Foo</span> lab needs <span id="NumNodes">0</span> Talos nodes</p>
                     <p class="fragment" data-autoslide="5000" style="font-size: .75em">(<span id="NumVirtualPXEBoots">0</span> have started PXE booting, and <span id="InitializedNodes">0</span> are up)</p>
                     <p class="fragment">&nbsp;</p>
-                    <p class="fragment singular" data-autoslide="10000">The talos nodes are booting up</p>
-                    <p class="fragment singular" data-autoslide="5000">These nodes are network booted</p>
-                    <p class="fragment singular" data-autoslide="5000">The disk image is only about 100Mb in size</p>
-                    <p class="fragment singular" data-autoslide="10000">This is what makes it awesome - it's tiny</p>
+                    <p class="fragment singular" data-autoslide="5000">Starting nodes can take some time</p>
+                    <p class="fragment singular" data-autoslide="5000">They pull their disk image from Boss</p>
+                    <p class="fragment singular" data-autoslide="5000">The OS image is only about 100Mb in size</p>
+                    <p class="fragment singular" data-autoslide="5000">It can be slow because of the netboot process</p>
+                    <!-- 30s initialization complete -->
+                    <p class="fragment singular" data-autoslide="10000">The nodes are booted with PXE/iPXE</p>
+                    <p class="fragment singular" data-autoslide="5000">iPXE takes a bit of time to finish init</p>
+                    <p class="fragment singular" data-autoslide="5000">The BOOTP process is pretty quick</p>
+                    <p class="fragment singular" data-autoslide="5000">For some reason, it still takes 30 seconds</p>
+                    <p class="fragment singular" data-autoslide="5000">The nodes should be done with iPXE init now</p>
+                    <!-- 30s initialization complete -->
                     <p class="fragment singular" data-autoslide="5000">Talos config is fetched from the network</p>
-                    <p class="fragment singular" data-autoslide="10000">Talos will automatically install</p>
+                    <p class="fragment singular" data-autoslide="5000">It will automatically install to the node</p>
                     <p class="fragment singular" data-autoslide="5000">The installation is minimal</p>
                     <p class="fragment singular" data-autoslide="5000">There's only enough Linux to start the kernel</p>
-                    <p class="fragment singular" data-autoslide="5000">The install makes Talos persistent</p>
+                    <p class="fragment singular" data-autoslide="5000">The install just makes Talos persistent</p>
                     <p class="fragment singular" data-autoslide="5000">Future boots could skip that step</p>                   
                     <p class="fragment singular" data-autoslide="5000">... but we are doing it the hard way!</p>
-                    <p class="fragment singular" data-autoslide="5000">Installation triggers a restart</p>
-                    <p class="fragment singular" data-autoslide="10000">The node does minimial initialization</p>
+                    <p class="fragment singular" data-autoslide="5000">Each node performs minimal initialization</p>
                     <p class="fragment singular" data-autoslide="5000">It synchronizes time first</p>
                     <p class="fragment singular" data-autoslide="5000">And pulls container images for the cluster</p>
                     <p class="fragment singular" data-autoslide="5000">Images are only pulled for the install</p>
+                    <p class="fragment singular" data-autoslide="5000">Installation triggers a restart</p>
                     <p class="fragment singular" data-autoslide="10000">After reboot, the node awaits bootstrapping</p>
                     <p class="fragment singular" data-autoslide="5000">One node needs to be bootstrapped first</p>
                     <p class="fragment singular" data-autoslide="5000">After first bootstrap, the cluster forms</p>
-                    <p class="fragment singular">We will bootstrap soon now</p>
+                    <p class="fragment singular" data-autoslide="99990000">We will bootstrap soon now</p>
                 </section>
                 <section id="bootstrapping" data-autoslide="50">
                     <h3>Bootstrapping</h3>
@@ -137,10 +151,9 @@
                     <p class="fragment" data-autoslide="5000">The bootstrap node starts cluster formation</p>
                     <p class="fragment" data-autoslide="5000">It serves as the etcd starting node</p>
                     <p class="fragment" data-autoslide="5000">Other nodes join to form the cluster</p>
-                    <p class="fragment" data-autoslide="5000">The etcd cluster is the backbone of K8S</p>
                     <p class="fragment" data-autoslide="5000">The K8S control plane coordinates via etcd</p>
                     <p class="fragment" data-autoslide="5000">The cluster settles with workers and CP nodes</p>
-                    <p class="fragment">We are just about there</p>
+                    <p class="fragment" data-autoslide="99990000">We are just about there</p>
                 </section>
                 <section id="finalizing" data-autoslide="50">
                     <h3>Finalizing</h3>
@@ -178,7 +191,7 @@
                     <p class="fragment singular" data-autoslide="5000">We also get memory and CPU metrics</p>
                     <p class="fragment singular" data-autoslide="5000">This is the K8S view rather than the node</p>
                     <p class="fragment singular" data-autoslide="10000">Having both lets us see scheduling pressure</p>
-                    <p class="fragment singular">We're almost done deploying</p>
+                    <p class="fragment singular" data-autoslide="99990000">We're almost done deploying</p>
                 </section>
                 <section id="starting" data-autoslide="50">
                     <h3>Starting</h3>
@@ -192,7 +205,7 @@
                     <p class="fragment singular" data-autoslide="5000">kube-proxy traverses underlay -> overlay</p>
                     <p class="fragment singular" data-autoslide="5000">coredns provides cluster DNS resolution</p>
                     <p class="fragment singular" data-autoslide="2000">It forwards non-cluster queries externally</p>
-                    <p class="fragment singular">Almost there - not much more to do</p>
+                    <p class="fragment singular" data-autoslide="99990000">Almost there - not much more to do</p>
                 </section>
                 <section id="done" data-state="doneSlide">
                     <h3>Done!</h3>
