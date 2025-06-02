@@ -51,6 +51,8 @@ func NewStatusinator(port string, l *slog.Logger) (*Statusinator, error) {
 		mux:  &sync.Mutex{},
 	}
 
+	m.send("boss", []byte("ready"))
+
 	return m, nil
 }
 
