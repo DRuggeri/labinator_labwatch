@@ -399,9 +399,11 @@ func main() {
 		}
 		log.Info("received shutdown signal", "signal", sigName)
 		propagateShutdown()
-		for statinator.Running() {
+		abortTime := time.Now().Add(time.Second * 5)
+		for statinator.Running() && time.Now().Before(abortTime) {
 			time.Sleep(time.Millisecond * 100)
 		}
+		os.Exit(0)
 	}()
 
 	err = http.ListenAndServe(":8080", nil)

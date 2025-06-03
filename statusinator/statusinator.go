@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
@@ -63,7 +64,7 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan LabSt
 	for {
 		select {
 		case <-controlContext.Done():
-			m.send("boss", []byte("ready"))
+			m.send("boss", []byte("shutdown"))
 			m.running = false
 			return
 		case s, ok := <-status:
@@ -93,6 +94,8 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan LabSt
 			} else {
 				m.log.Error("error encountered reading events")
 			}
+		default:
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 }
