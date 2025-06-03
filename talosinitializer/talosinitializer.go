@@ -250,6 +250,7 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 					if tmp {
 						i.log.Info("disk wipes complete")
 						diskWipeDone = true
+						labMan.EnableLab()
 						return
 					}
 				}
@@ -283,11 +284,18 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 			time.Sleep(time.Millisecond * 100)
 		}
 		pMan.TurnOff(powerman.PALL)
+
+		for {
+			if pMan.PortIsOff(powerman.PALL) {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
 		time.Sleep(time.Second)
 		drainChans()
 	}
 
-	// Boot the boxes! This sets the lastlab so we can know if the disks
+	// Boot the boxes! We also set the lastlab so we can know if the disks
 	// potentially need to be wiped
 	i.updateStep(initStatus, "powerup", log)
 	err = os.WriteFile(i.lastLabFile, []byte(scenario), 0644)
