@@ -74,6 +74,37 @@
                     <p class="fragment singular" data-autoslide="5000">A cluster could need more than 70 keys</p>
                     <p class="fragment singular" data-autoslide="99990000">The tokens are useless after 24 hours</p>
                 </section>
+                <section id="disk wipe" data-autoslide="50">
+                    <h3>Wiping Disks</h3>
+                    <p class="fragment" data-autoslide="5000">We are wiping the partition table</p>
+                    <p class="fragment" data-autoslide="5000">You may have noticed that start already</p>
+                    <p>&nbsp;</p>
+                    <p class="fragment singular" data-autoslide="10000">Physical talos nodes write to the disks</p>
+                    <p class="fragment singular" data-autoslide="5000">Secrets, state, volumes, etc are included</p>
+                    <p class="fragment singular" data-autoslide="5000">Get rid of it - we're starting a new cluster</p>
+                    <!-- 30s initialization complete -->
+                    <p class="fragment singular" data-autoslide="5000">The existing files also mess up our lab</p>
+                    <p class="fragment singular" data-autoslide="5000">Talos will try to use existing partitions</p>
+                    <p class="fragment singular" data-autoslide="5000">No need to reinstall over and over again</p>
+                    <p class="fragment singular" data-autoslide="5000">It also shortens the boot time</p>
+                    <p class="fragment singular" data-autoslide="5000">(You probably also don't want to lose data)</p>
+                    <p class="fragment singular" data-autoslide="10000">This makes a lot of sense in production</p>
+                    <!-- 60s initialization complete -->
+                    <p class="fragment singular" data-autoslide="5000">For Labinator, we start fresh every time</p>
+                    <p class="fragment singular" data-autoslide="10000">Plus, it shows that we aren't faking it!</p>
+                    <p class="fragment singular" data-autoslide="5000">The wipe is done with Debian Linux</p>
+                    <p class="fragment singular" data-autoslide="5000">It is also the distro in our VM labs</p>
+                    <p class="fragment singular" data-autoslide="5000">The OS image is about 300Mb in size</p>
+                    <p class="fragment singular" data-autoslide="10000">It isn't much, but it still takes too long</p>
+                    <p class="fragment singular" data-autoslide="5000">Debian is a great general purpose distro</p>
+                    <p class="fragment singular" data-autoslide="5000">We could add lots of utilities if we wanted</p>
+                    <p class="fragment singular" data-autoslide="10000">...but we don't need that</p>
+                    <p class="fragment singular" data-autoslide="5000">This is a "live" distro of Debian</p>
+                    <p class="fragment singular" data-autoslide="5000">It is self-contained, and made for this lab</p>
+                    <p class="fragment singular" data-autoslide="5000">It doesn't get installed on the boxes</p>
+                    <p class="fragment singular" data-autoslide="5000">Boss will be informed when it is done wiping</p>
+                    <p class="fragment singular" data-autoslide="99990000">It should be done pretty soon</p>
+                </section>
                 <section id="powerup">
                     <h3>Power Is On!</h3>
                     <p>The machines are starting to come up</p>
@@ -147,12 +178,16 @@
                 </section>
                 <section id="bootstrapping" data-autoslide="50">
                     <h3>Bootstrapping</h3>
-                    <p class="fragment" data-autoslide="5000">Bootstrapping initializes the first node</p>
-                    <p class="fragment" data-autoslide="5000">The bootstrap node starts cluster formation</p>
-                    <p class="fragment" data-autoslide="5000">It serves as the etcd starting node</p>
-                    <p class="fragment" data-autoslide="5000">Other nodes join to form the cluster</p>
+                    <p class="fragment" data-autoslide="5000">Bootstrapping sets up the etcd cluster</p>
                     <p class="fragment" data-autoslide="5000">The K8S control plane coordinates via etcd</p>
-                    <p class="fragment" data-autoslide="5000">The cluster settles with workers and CP nodes</p>
+                    <p>&nbsp;</p>
+                    <p class="fragment singular" data-autoslide="5000">The bootstrap node starts cluster formation</p>
+                    <p class="fragment singular" data-autoslide="5000">It serves as the first cluster leader</p>
+                    <p class="fragment singular" data-autoslide="5000">Nodes join as followers to form the cluster</p>
+                    <p class="fragment singular" data-autoslide="5000">The Raft algorithm is used to set future leaders</p>
+                    <p class="fragment singular" data-autoslide="5000">The leader handles writes and replication</p>
+                    <p class="fragment singular" data-autoslide="5000">All nodes support read operations</p>
+                    <p class="fragment singular" data-autoslide="5000">The cluster settles with workers and CP nodes</p>
                     <p class="fragment" data-autoslide="99990000">We are just about there</p>
                 </section>
                 <section id="finalizing" data-autoslide="50">
@@ -272,7 +307,6 @@
 				progress: true,
 				viewDistance: 100,
 
-                /*
                 controls: false,
                 jumpToSlide: false,
                 history: false,
@@ -280,7 +314,7 @@
                 overview: false,
                 touch: false,
                 mouseWheel: false,
-*/
+
 				plugins: [ RevealMarkdown, RevealHighlight, Tagteam ]
 			});
 
