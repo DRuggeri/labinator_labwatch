@@ -4,9 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/port"
@@ -41,8 +41,9 @@ func main() {
 	}
 
 	log.Info("configuring lab", "lab", activeLab)
-	os.Remove(filepath.Join("/var/www/html/nodes-ipxe/", "lab"))
-	os.Symlink(filepath.Join("/var/www/html/nodes-ipxe/", activeLab), filepath.Join("/var/www/html/nodes-ipxe/", "lab"))
+	labMan := lablinkmanager.NewLinkManager("/var/www/html/nodes-ipxe/", "lab", activeLab)
+	labMan.EnableLab()
+
 	// Ensure boxes are down
 	pMan.TurnOff(powerman.PALL)
 	// Wait for all to be off
@@ -65,7 +66,7 @@ func main() {
 
 	initializerCtx, initializerCancel := context.WithCancel(ctx)
 	defer initializerCancel()
-	go initializer.Initialize(initializerCtx, activeLab, pMan)
+	go initializer.Initialize(initializerCtx, activeLab, labMan, pMan)
 
 OUTER:
 	for {

@@ -10,17 +10,21 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/DRuggeri/labwatch/browserhandler"
+	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/statusinator"
 	"github.com/DRuggeri/labwatch/talosinitializer"
+	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
@@ -110,6 +114,8 @@ func main() {
 		}
 	}
 
+	mainCtx, propagateShutdown := context.WithCancel(context.Background())
+
 	var initializerCtx context.Context
 	var initializerCancel context.CancelFunc
 	initializer, err := talosinitializer.NewTalosInitializer(cfg.TalosConfigFile, cfg.TalosScenarioConfig, cfg.TalosScenariosDir, "koob", log)
@@ -133,15 +139,17 @@ func main() {
 	addStatusClient("statusinator", statusinatorStatusChan)
 	statusinatorEventChan := make(chan loki.LogEvent, 5)
 	addEventClient("statusinator", statusinatorEventChan)
-	go statinator.Watch(context.Background(), statusinatorStatusChan, statusinatorEventChan)
+	go statinator.Watch(mainCtx, statusinatorStatusChan, statusinatorEventChan)
 
-	wMan := wm.NewWindowsManager(context.Background(), log)
+	wMan := wm.NewWindowsManager(mainCtx, log)
 	if err != nil {
 		log.Error("failed to create the windows manager", "error", err.Error())
 		os.Exit(1)
 	}
 
-	watcherCancel, err := startWatchers(cfg, activeLab, pMan, nil, log)
+	cbWatcher, _ := callbacks.NewCallbackWatcher(mainCtx, log)
+
+	watcherCancel, err := startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, nil, log)
 	if err != nil {
 		log.Error("failed to start watchers", "error", err.Error())
 		os.Exit(1)
@@ -154,11 +162,13 @@ func main() {
 	}
 
 	http.Handle("/power", pMan)
+	http.Handle("/callbacks", cbWatcher)
 
 	resetWatchers := func() {
 		log.Info("resetting watchers")
 		watcherCancel()
-		watcherCancel, err = startWatchers(cfg, activeLab, pMan, initializer, log)
+		cbWatcher.Reset()
+		watcherCancel, err = startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, initializer, log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
 			os.Exit(1)
@@ -207,8 +217,8 @@ func main() {
 		activeLab = lab
 
 		log.Info("configuring lab", "lab", activeLab, "numWatchEndpoints", len(endpoints))
-		os.Remove(filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
-		os.Symlink(filepath.Join(cfg.NetbootFolder, activeLab), filepath.Join(cfg.NetbootFolder, cfg.NetbootLink))
+		labMan := lablinkmanager.NewLinkManager(cfg.NetbootFolder, cfg.NetbootLink, activeLab)
+		labMan.EnableLab()
 
 		// Ensure boxes are down
 		pMan.TurnOff(powerman.PALL)
@@ -222,8 +232,8 @@ func main() {
 
 		resetWatchers()
 
-		initializerCtx, initializerCancel = context.WithCancel(context.Background())
-		go initializer.Initialize(initializerCtx, lab, pMan)
+		initializerCtx, initializerCancel = context.WithCancel(mainCtx)
+		go initializer.Initialize(initializerCtx, lab, labMan, pMan)
 	})
 
 	http.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {
@@ -362,7 +372,7 @@ func main() {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		wMan.StartWindow(context.Background(), cmd, wm.WMScreenBottom)
+		wMan.StartWindow(mainCtx, cmd, wm.WMScreenBottom)
 	})
 
 	fsys, err := fs.Sub(siteFS, "site")
@@ -374,18 +384,46 @@ func main() {
 	fileServer := http.FileServer(http.FS(fsys))
 	http.Handle("/", fileServer)
 
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
+	go func() {
+		sig := <-sigChan
+		sigName := "ARG"
+		switch sig {
+		case syscall.SIGTERM:
+			sigName = "SIGTERM"
+		case syscall.SIGHUP:
+			sigName = "SIGHUP"
+		case syscall.SIGINT:
+			sigName = "SIGINT"
+		}
+		log.Info("received shutdown signal", "signal", sigName)
+		propagateShutdown()
+		for statinator.Running() {
+			time.Sleep(time.Millisecond * 100)
+		}
+	}()
+
 	err = http.ListenAndServe(":8080", nil)
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
-func startWatchers(cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, initializer *talosinitializer.TalosInitializer, log *slog.Logger) (context.CancelFunc, error) {
+func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, cbWatcher *callbacks.CallbackWatcher, initializer *talosinitializer.TalosInitializer, log *slog.Logger) (context.CancelFunc, error) {
 	log = log.With("operation", "startWatchers")
 
 	var err error
 	var portBroadcast chan<- port.PortStatus
+	var cbBroadcast chan<- callbacks.CallbackStatus
 	var iInfo <-chan talosinitializer.InitializerStatus
+	var cbStatus <-chan callbacks.CallbackStatus
 	endpoints := []string{}
 
+	if cbWatcher != nil {
+		cbStatus = cbWatcher.GetStatusUpdateChan()
+		if initializer != nil {
+			cbBroadcast = initializer.GetCBChan()
+		}
+	}
 	if initializer != nil {
 		portBroadcast = initializer.GetPortChan()
 		iInfo = initializer.GetStatusUpdateChan()
@@ -397,7 +435,7 @@ func startWatchers(cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, 
 
 	log.Debug("starting watchers", "endpoints", endpoints, "portchan", portBroadcast != nil)
 	status := statusinator.LabStatus{}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
 	tInfo := make(chan map[string]talos.NodeStatus)
 	/*
@@ -458,6 +496,16 @@ func startWatchers(cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, 
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading power status")
+				}
+			case c, ok := <-cbStatus:
+				if ok {
+					status.Callbacks = c
+					broadcastStatusUpdate = true
+					if cbBroadcast != nil {
+						cbBroadcast <- c
+					}
+				} else {
+					log.Error("error encountered reading callback states")
 				}
 			case p, ok := <-portInfo:
 				if ok {

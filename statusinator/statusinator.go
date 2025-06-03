@@ -15,10 +15,11 @@ import (
 )
 
 type Statusinator struct {
-	opts serial.OpenOptions
-	port io.ReadWriteCloser
-	log  *slog.Logger
-	mux  *sync.Mutex
+	opts    serial.OpenOptions
+	port    io.ReadWriteCloser
+	log     *slog.Logger
+	running bool
+	mux     *sync.Mutex
 }
 
 // Cuts out Talos and port monitoring information to keep payload less than 2048 bytes
@@ -57,10 +58,13 @@ func NewStatusinator(port string, l *slog.Logger) (*Statusinator, error) {
 }
 
 func (m *Statusinator) Watch(controlContext context.Context, status <-chan LabStatus, events <-chan loki.LogEvent) {
+	m.running = true
 	m.log.Info("watching for statuses")
 	for {
 		select {
 		case <-controlContext.Done():
+			m.send("boss", []byte("ready"))
+			m.running = false
 			return
 		case s, ok := <-status:
 			if ok {
@@ -91,6 +95,10 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan LabSt
 			}
 		}
 	}
+}
+
+func (m *Statusinator) Running() bool {
+	return m.running
 }
 
 func (m *Statusinator) send(t string, payload []byte) {
