@@ -3,6 +3,7 @@ package statusinator
 import (
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
+	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
@@ -13,5 +14,6 @@ type LabStatus struct {
 	Talos       map[string]talos.NodeStatus        `json:"talos"`
 	Power       powerman.PowerStatus               `json:"power"`
 	Ports       port.PortStatus                    `json:"ports"`
+	Callbacks   callbacks.CallbackStatus           `json:"callbacks"`
 	Logs        loki.LogStats                      `json:"logs"`
 }
