@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,7 @@ type PortStatus map[string]bool
 type PortWatcher struct {
 	trace              bool
 	endpoints          map[string]bool
+	mux                *sync.Mutex
 	internalStatusChan chan singlePortStatus
 	log                *slog.Logger
 }
@@ -38,6 +40,7 @@ func NewPortWatcher(ctx context.Context, endpoints []string, trace bool, log *sl
 	return &PortWatcher{
 		endpoints:          e,
 		trace:              trace,
+		mux:                &sync.Mutex{},
 		internalStatusChan: make(chan singlePortStatus),
 		log:                log.With("operation", "PortWatcher"),
 	}, nil
@@ -91,11 +94,29 @@ func (w *PortWatcher) Watch(controlContext context.Context, resultChan chan<- Po
 		case <-controlContext.Done():
 			return
 		case s := <-w.internalStatusChan:
+			w.mux.Lock()
 			w.endpoints[s.endpoint] = s.status
 			resultChan <- w.endpoints
+			w.mux.Unlock()
 		default:
 			// Not ready to read from control channel or watcher - carry on
 		}
 		time.Sleep(sleepDuration)
+	}
+}
+
+func (w *PortWatcher) ResetAllToDown() {
+	w.mux.Lock()
+	defer w.mux.Unlock()
+	for e := range w.endpoints {
+		w.endpoints[e] = false
+	}
+}
+
+func (w *PortWatcher) ResetToDown(e string) {
+	w.mux.Lock()
+	defer w.mux.Unlock()
+	if _, ok := w.endpoints[e]; ok {
+		w.endpoints[e] = false
 	}
 }
