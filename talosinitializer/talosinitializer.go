@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
+	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"gopkg.in/yaml.v3"
 )
@@ -22,10 +24,12 @@ type TalosInitializer struct {
 	talosConfig    string
 	scenarioConfig map[string]ScenarioConfig
 	nodesDir       string
+	lastLabFile    string
 	lastStepStart  time.Time
 	log            *slog.Logger
 	k8sContext     string
 	portStatuses   chan port.PortStatus
+	cbStatuses     chan callbacks.CallbackStatus
 	statusChan     chan InitializerStatus
 }
 
@@ -98,9 +102,11 @@ func NewTalosInitializer(talosConfigFile string, scenarioConfigFile string, scen
 		talosConfig:    talosConfigFile,
 		scenarioConfig: cfg,
 		nodesDir:       scenarioNodesDir,
+		lastLabFile:    filepath.Join(scenarioNodesDir, "lastlab"),
 		k8sContext:     k8sContext,
 		log:            log.With("operation", "TalosInitializer"),
 		portStatuses:   make(chan port.PortStatus, 5),
+		cbStatuses:     make(chan callbacks.CallbackStatus, 5),
 		statusChan:     make(chan InitializerStatus, 5),
 	}, nil
 }
@@ -126,6 +132,10 @@ func (i *TalosInitializer) GetWatchEndpoints(scenario string) ([]string, error) 
 
 func (i *TalosInitializer) GetPortChan() chan<- port.PortStatus {
 	return i.portStatuses
+}
+
+func (i *TalosInitializer) GetCBChan() chan<- callbacks.CallbackStatus {
+	return i.cbStatuses
 }
 
 func (i *TalosInitializer) GetStatusUpdateChan() <-chan InitializerStatus {
@@ -155,7 +165,7 @@ func (i *TalosInitializer) sendStatusUpdate(s InitializerStatus) {
 	}
 }
 
-func (i *TalosInitializer) Initialize(controlContext context.Context, scenario string, pMan *powerman.PowerManager) {
+func (i *TalosInitializer) Initialize(controlContext context.Context, scenario string, labMan *lablinkmanager.LinkManager, pMan *powerman.PowerManager) {
 	config, ok := i.scenarioConfig[scenario]
 	log := i.log.With("scenario", scenario)
 
@@ -165,28 +175,86 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 	}
 
 	hypervisors, nodeNames := config.GetHypervisorsAndNodes()
+
+	b, _ := os.ReadFile(i.lastLabFile)
+	lastLab := string(b)
+	labHasPhysicalNodes := false
+	needDiskWipe := false
+	diskWipeDone := false
+
 	nodeEndpointMap := map[string]NodeConfig{}
 	hypervisorEndpointMap := map[string]string{}
+	diskWipeMap := map[string]NodeConfig{}
 
-	log.Info("initializing scenario", "numHypervisors", len(hypervisors), "numNodes", len(nodeNames))
 	i.lastStepStart = time.Now()
 
-	// Drain any port updates on the chan to start fresh
-DRAIN:
-	for {
-		select {
-		case <-i.portStatuses:
-		default:
-			break DRAIN
+	// Drain any port or callback updates on the chans to start fresh
+	// Store as a func to do it again later in case of disk wipe
+	drainChans := func() {
+	DRAIN:
+		for {
+			select {
+			case <-i.portStatuses:
+			case <-i.cbStatuses:
+			default:
+				break DRAIN
+			}
 		}
 	}
+	drainChans()
 
 	for ip := range hypervisors {
 		hypervisorEndpointMap[fmt.Sprintf("%s:22", ip)] = ip
 	}
 
 	for _, name := range nodeNames {
-		nodeEndpointMap[fmt.Sprintf("%s:50000", config.Nodes[name].IP)] = config.Nodes[name]
+		node := config.Nodes[name]
+		nodeEndpointMap[fmt.Sprintf("%s:50000", node.IP)] = node
+
+		// Physical or hypervisor nodes are bare metal so their disk needs to be
+		// wiped before launching a lab using a physical Talos node. This is only
+		// required for a Talos node (since the hypervisors autowipe), but it doesn't
+		// hurt to do all of them if we have to do one of them
+		switch node.Type {
+		case "physical":
+			labHasPhysicalNodes = true
+			fallthrough
+		case "hypervisor":
+			diskWipeMap[node.IP] = node
+		}
+	}
+
+	if labHasPhysicalNodes && (strings.Contains(lastLab, "hybrid") || strings.Contains(lastLab, "physical")) {
+		needDiskWipe = true
+	}
+
+	log.Info("initializing scenario", "numHypervisors", len(hypervisors), "numNodes", len(nodeNames), "labHasPhysicalNodes", labHasPhysicalNodes, "needDiskWipe", needDiskWipe)
+
+	// We need to wipe disks first - start that now while secret generation runs
+	if needDiskWipe {
+		labMan.EnableDiskWipe()
+		pMan.TurnOn(powerman.PALL)
+		go func() {
+			for {
+				select {
+				case <-controlContext.Done():
+					return
+				case s := <-i.cbStatuses:
+					tmp := true
+					for ip := range diskWipeMap {
+						if s.KVPairs[ip] == nil || s.KVPairs[ip]["wipe"] == "" {
+							tmp = false
+						}
+					}
+
+					if tmp {
+						i.log.Info("disk wipes complete")
+						diskWipeDone = true
+						return
+					}
+				}
+			}
+		}()
 	}
 
 	initStatus := &InitializerStatus{
@@ -202,15 +270,30 @@ DRAIN:
 	command := exec.CommandContext(controlContext, filepath.Join(i.nodesDir, scenario, "generate.sh"))
 	result, err := command.CombinedOutput()
 	log.Debug("run result", "command", command, "error", err, "output", string(result))
-	if err != nil {
-		log.Error("bootstrap failed", "output", string(result))
+	if err != nil || !strings.Contains(string(result), "Victory is mine!") {
+		log.Error("secret generation failed", "output", string(result))
 		initStatus.Failed = true
 		i.sendStatusUpdate(*initStatus)
 		return
 	}
 
-	// Boot the boxes!
+	if needDiskWipe && !diskWipeDone {
+		i.updateStep(initStatus, "disk wipe", log)
+		for !diskWipeDone {
+			time.Sleep(time.Millisecond * 100)
+		}
+		pMan.TurnOff(powerman.PALL)
+		time.Sleep(time.Second)
+		drainChans()
+	}
+
+	// Boot the boxes! This sets the lastlab so we can know if the disks
+	// potentially need to be wiped
 	i.updateStep(initStatus, "powerup", log)
+	err = os.WriteFile(i.lastLabFile, []byte(scenario), 0644)
+	if err != nil {
+		log.Error("failed to write lastlab file", "file", i.lastLabFile, "error", err.Error())
+	}
 	pMan.TurnOn(powerman.PALL)
 
 	step := "booting-nodes"
@@ -310,7 +393,13 @@ INITLOOP:
 		if node.Role == "controlplane" {
 			i.updateStep(initStatus, "bootstrapping", log)
 			log.Info("bootstrapping Kubernetes through control plane node", "node", name)
-			BootstrapCluster(controlContext, i.talosConfig, node.IP, scenario, i.k8sContext, log)
+			err = BootstrapEtcd(controlContext, i.talosConfig, node.IP, scenario, i.k8sContext, log)
+			if err != nil {
+				log.Error("secret generation failed", "output", string(result))
+				initStatus.Failed = true
+				i.sendStatusUpdate(*initStatus)
+				return
+			}
 			break
 		}
 	}
@@ -337,6 +426,7 @@ INITLOOP:
 func (config ScenarioConfig) GetHypervisorsAndNodes() (map[string][]NodeConfig, []string) {
 	hypervisors := map[string][]NodeConfig{}
 	nodes := []string{}
+
 	for _, cfg := range config.Nodes {
 		if cfg.Hypervisor.IP != "" {
 			if hypervisors[cfg.Hypervisor.IP] == nil {
@@ -398,7 +488,7 @@ func ConfigureNode(ctx context.Context, ip string, configFile string, talosConte
 	log.Debug("run result", "startcommand", command, "error", err, "output", string(result))
 }
 
-func BootstrapCluster(ctx context.Context, talosConfig string, ip string, talosContext string, k8sContext string, log *slog.Logger) {
+func BootstrapEtcd(ctx context.Context, talosConfig string, ip string, talosContext string, k8sContext string, log *slog.Logger) error {
 	command := exec.CommandContext(ctx, "talosctl",
 		"--talosconfig", talosConfig,
 		"--context", talosContext,
@@ -410,15 +500,17 @@ func BootstrapCluster(ctx context.Context, talosConfig string, ip string, talosC
 	result, err := command.CombinedOutput()
 	log.Debug("run result", "command", command, "error", err, "output", string(result))
 	if err != nil {
-		log.Error("bootstrap failed", "output", string(result))
-		return
+		log.Error("bootstrap failed", "output", string(result),
+			"command", fmt.Sprintf("talosctl --talosconfig %s --context %s --nodes %s --endpoints %s bootstrap",
+				talosConfig, talosContext, ip, ip))
+		return err
 	}
 
 	//Wait for port 6443 in case node is restarting and still coming up
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 		}
 
@@ -445,8 +537,9 @@ func BootstrapCluster(ctx context.Context, talosConfig string, ip string, talosC
 	log.Debug("run result", "command", command, "error", err, "output", string(result))
 	if err != nil {
 		log.Error("fetching k8s config failed", "output", string(result))
-		return
+		return err
 	}
+	return nil
 }
 
 func FinalizeInstall(ctx context.Context, log *slog.Logger) {
