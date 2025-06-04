@@ -81,6 +81,7 @@ func (cbw *CallbackWatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status.ClientCount[client] = num
 	}
 
+	cbw.log.Debug("dispatching callback to chan")
 	cbw.statusChan <- status
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("callback received"))
