@@ -34,6 +34,16 @@
 			left: 0;
 			z-index: 100;
 		}
+		table.nodes {
+			font-size: .4em;
+		}
+		.singular.visible {
+            display: none;
+        }
+        .singular.visible.current-fragment {
+            display: block;
+            animation: fadein 1s cubic-bezier(0.6, -0.05, 0.9, 0.9) normal;
+        }
 	</style>
 	<script src="js/boss.js"></script>
 	<script>
@@ -64,7 +74,7 @@
 	<body>
 		<div class="reveal">
 			<div id="menu" class="slides">
-				<section id="experiments" data-name="Experiments">
+				<section id="labs" data-name="Labs">
 					<a href="#/vms">Virtual Machines Only</a><br />
 					<a href="#/physical">Bare Metal Only</a><br />
 					<a href="#/vmsbms">VM and BM Combo</a><br />
@@ -85,7 +95,6 @@
 						<a onclick="startLab('hybrid-3')">3 VMs per worker node</a><br />
 						<a onclick="startLab('hybrid-4')">4 VMs per worker node</a><br />
 					  </section>
-				</section>
 				<section id="chaos" data-name="Chaos">
 					<a href="#/kill-box">Kill a Box</a><br />
 					<a href="#/restart-box">Restart a Box</a><br />
@@ -108,7 +117,6 @@
 						<a onclick="sendThenSlide('/power?action=restart&port=p5', 'chaos');">Restart Box 5</a><br />
 						<a onclick="sendThenSlide('/power?action=restart&port=p6', 'chaos');">Restart Box 6</a><br />
 					</section>
-				</section>
 				<section id="observe" data-name="Observe">
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=30s');">Boss</a><br />
 					<a href="#/bosssystem">Boss - System</a><br />
@@ -172,6 +180,151 @@
 				<section id="system" data-name="System">
 					<a onclick="sendThenSlide('/system?action=restart', 'chaos');">Restart the Lab</a><br />
 					<a onclick="sendThenSlide('/system?action=shutdown', 'chaos');">Shut Down the Lab</a><br />
+				</section>
+				<section id="help" data-name="Help">
+					<a href="#/about">What is this thing?</a><br />
+					<a href="#/components">What are the components?</a><br />
+					<a href="#/issues">Something Isn't Working</a><br />
+				</section>
+				<section id="about">
+					<p style="font-size:.5em">
+						This is Labinator.
+						It is a mobile lab that lets you run/observe experiments.
+						It is built on cheap, slow, commodity hardware bought from the Internet and sprinkled with a bunch of 3D printed stuff.
+					</p>
+					<p style="font-size:.5em">
+						In its current iteration, it demonstrates the creation of a new Kubernetes cluster from scratch with Talos Linux.
+						Labinator uses freely licensed Open Source projects available on the Internet to do its work.
+					</p>
+					<p style="font-size:.5em">
+						To learn a LOT more about labinator, its history, and the build, scane the QR code next to the power supply.
+						Or, just go to <a href="">https://labinator.bitnebula.com/</a>
+					</p>
+				</section>
+				<section id="components">
+					<a href="/#nodes">Experiment nodes</a>
+					<a href="/#infrastructure">Infrastructure bits</a>
+				</section>
+				<section id="nodes">
+					<table class="nodes">
+						<tr>
+							<th style="border:none;">Node1</th><th style="border:none;">Node3</th><th style="border:none;">Node5</th>
+						</tr>
+						<tr>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.11</li>
+									<li>Power: Port 1</li>
+									<li>Net: Port 3</li>
+								</ul>
+							</td>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.13</li>
+									<li>Power: Port 3</li>
+									<li>Net: Port 5</li>
+								</ul>
+							</td>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.15</li>
+									<li>Power: Port 5</li>
+									<li>Net: Port 8</li>
+								</ul>
+							</td>
+						</tr>
+					</table>
+					<table class="nodes" style="margin-top: 1em">
+						<tr>
+							<th style="border:none;">Node2</th><th style="border:none;">Node4</th><th style="border:none;">Node6</th>
+						</tr>
+						<tr>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.12</li>
+									<li>Power: Port 2</li>
+									<li>Net: Port 4</li>
+								</ul>
+							</td>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.14</li>
+									<li>Power: Port 4</li>
+									<li>Net: Port 6</li>
+								</ul>
+							</td>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.16</li>
+									<li>Power: Port 6</li>
+									<li>Net: Port 7</li>
+								</ul>
+							</td>
+						</tr>
+					</table>
+					<a href="/#components" style="font-size: .5em;">back</a>
+				</section>
+				<section id="infrastructure">
+					<table class="nodes">
+						<tr>
+							<th style="border:none;">Boss</th><th style="border:none;">Wally</th><th style="border:none;">Switch</th>
+						</tr>
+						<tr>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.3</li>
+									<li>Power: Port 7</li>
+									<li>Net: Port 2</li>
+									<li>OS: Debian GNU Linux</li>
+									<li>Location: Under bottom touchscreen</li>
+								</ul>
+							</td>
+							<td>
+								<ul>
+									<li>IP: 192.168.122.1</li>
+									<li>Power: -</li>
+									<li>Net: Port 1</li>
+									<li>OS: OpenWRT</li>
+									<li>Location: Under top touchscreen</li>
+								</ul>
+							</td>
+							<td>
+								<ul>
+									<li>IP: 192.168.2.2</li>
+									<li>Power: -</li>
+									<li>Net: N/A</li>
+									<li>OS: N/A</li>
+									<li>Location: Bottom right of lab</li>
+								</ul>
+							</td>
+						</tr>
+					</table>
+					<a href="/#components" style="font-size: .5em;">back</a>
+				</section>
+				<section id="issues" data-autoslide="50">
+					<p class="fragment" style="padding-top: .5em;" data-autoslide="2000">To Fix Issues:</p>
+                    <p class="fragment" style="font-size: .75em; color: red;" data-autoslide="2000">Turn it off and back on again</p>
+					<p class="fragment" style="font-size: .5em;" data-autoslide="5000">(Use the System link above)</p>
+                    <p>&nbsp;</p>
+                    <p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">No... really</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">It's magic!!!</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="2000">Just kidding</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">You could also just retry the lab</p>
+                    <p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Labinator is made of cheap components</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Things go wrong often</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Just try it again after reboot</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">There are several known issues</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">In order of frequency, sometimes...</p>
+
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">a monitor doesn't turn on</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Boss doesn't serve TFTP</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">a VM disappears</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">labwatch misses important progress</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">a hypervisor freezes due to load</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Relayinator doesn't know a port's state</p>
+
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="10000">Follow the QR code on the power supply for more</p>
+					<p class="fragment singular" style="font-size: .5em;">&nbsp;</p>
 				</section>
 			</div>
 		</div>
