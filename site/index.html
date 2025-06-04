@@ -74,136 +74,94 @@
 	<body>
 		<div class="reveal">
 			<div id="menu" class="slides">
-				<section id="labs" data-name="Labs">
-					<a href="#/vms">Virtual Machines Only</a><br />
-					<a href="#/physical">Bare Metal Only</a><br />
-					<a href="#/vmsbms">VM and BM Combo</a><br />
-					</section>
-					  <section id="vms">
-						<span class="small">Launch VM lab with...</span><br />
-						<a onclick="startLab('virtual-2')">2 VMs per host</a><br />
-						<a onclick="startLab('virtual-3')">3 VMs per host</a><br />
-						<a onclick="startLab('virtual-4')">4 VMs per host</a><br />
-					  </section>
-					  <section id="physical">
-						<span class="small">Launch Bare Metal lab...</span><br />
-						<a onclick="startLab('physical')">All six nodes</a><br />
-					  </section>
-					  <section id="vmsbms">
-						<span class="small">Launch Bare Metal control plane with...</span><br />
-						<a onclick="startLab('hybrid-2')">2 VMs per worker node</a><br />
-						<a onclick="startLab('hybrid-3')">3 VMs per worker node</a><br />
-						<a onclick="startLab('hybrid-4')">4 VMs per worker node</a><br />
-					  </section>
-				<section id="chaos" data-name="Chaos">
-					<a href="#/kill-box">Kill a Box</a><br />
-					<a href="#/restart-box">Restart a Box</a><br />
-					<a href="#/kill-net">Kill a Box's Network</a><br />
-					<a href="#/kill-az">Kill an AZ's Network</a><br />
-				</section>
-					<section id="kill-box">
-						<a onclick="sendThenSlide('/power?action=turnoff&port=p1', 'chaos');">Kill Box 1</a><br />
-						<a onclick="sendThenSlide('/power?action=turnoff&port=p2', 'chaos');">Kill Box 2</a><br />
-						<a onclick="sendThenSlide('/power?action=turnoff&port=p3', 'chaos');">Kill Box 3</a><br />
-						<a onclick="sendThenSlide('/power?action=turnoff&port=p4', 'chaos');">Kill Box 4</a><br />
-						<a onclick="sendThenSlide('/power?action=turnoff&port=p5', 'chaos');">Kill Box 5</a><br />
-						<a onclick="sendThenSlide('/power?action=turnoff&port=p6', 'chaos');">Kill Box 6</a><br />
-					</section>
-					<section id="restart-box">
-						<a onclick="sendThenSlide('/power?action=restart&port=p1', 'chaos');">Restart Box 1</a><br />
-						<a onclick="sendThenSlide('/power?action=restart&port=p2', 'chaos');">Restart Box 2</a><br />
-						<a onclick="sendThenSlide('/power?action=restart&port=p3', 'chaos');">Restart Box 3</a><br />
-						<a onclick="sendThenSlide('/power?action=restart&port=p4', 'chaos');">Restart Box 4</a><br />
-						<a onclick="sendThenSlide('/power?action=restart&port=p5', 'chaos');">Restart Box 5</a><br />
-						<a onclick="sendThenSlide('/power?action=restart&port=p6', 'chaos');">Restart Box 6</a><br />
-					</section>
-				<section id="observe" data-name="Observe">
-					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=30s');">Boss</a><br />
-					<a href="#/bosssystem">Boss - System</a><br />
-					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/k8s_views_global/kubernetes-views-global?kiosk=true&orgId=1&from=now-1h&to=now&timezone=browser&var-datasource=prometheus&var-cluster=&var-resolution=30s&refresh=30s')">Kubernetes</a><br />
-					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/logs/logs?kiosk=&orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s')">Logs</a><br />
-					<a onclick="navigateBottomWindow('http://boss.local:8080/status.html')">Lab Status</a><br />
-					<a href="#/vmvnc">VM Screens</a><br />
-				</section>
-				<section id="bosssystem">
-					<a onclick="sendThenSlide('/launch?command=htop', 'observe');">htop</a><br />
-					<a onclick="sendThenSlide('/launch?command=top', 'observe');">ttop</a><br />
-					<a onclick="sendThenSlide('/launch?command=tcpdump', 'observe');">tcpdump</a><br />
-					<a onclick="sendThenSlide('/launch?command=journal', 'observe');">system journal</a><br />
-					<a onclick="sendThenSlide('/launch?command=apache', 'observe');">Apache access log</a><br />
-				</section>
-				<section id="vmvnc">
-					<table style="font-size:.5em;">
-						<tr>
-							<th>Node1</th>
-							<th>Node2</th>
-							<th>Node3</th>
-							<th>Node4</th>
-							<th>Node5</th>
-							<th>Node6</th>
-						</tr>
-						<tr>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=1', 'observe');">VM1</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=1', 'observe');">VM1</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=1', 'observe');">VM1</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=1', 'observe');">VM1</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=1', 'observe');">VM1</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=1', 'observe');">VM1</a><br /></td>
-						</tr>
-						<tr>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=2', 'observe');">VM2</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=2', 'observe');">VM2</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=2', 'observe');">VM2</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=2', 'observe');">VM2</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=2', 'observe');">VM2</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=2', 'observe');">VM2</a><br /></td>
-						</tr>
-						<tr>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=3', 'observe');">VM3</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=3', 'observe');">VM3</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=3', 'observe');">VM3</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=3', 'observe');">VM3</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=3', 'observe');">VM3</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=3', 'observe');">VM3</a><br /></td>
-						</tr>
-						<tr>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=4', 'observe');">VM4</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=4', 'observe');">VM4</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=4', 'observe');">VM4</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=4', 'observe');">VM4</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=4', 'observe');">VM4</a><br /></td>
-							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=4', 'observe');">VM4</a><br /></td>
-						</tr>
-					</table>
-					<p style="font-size:.45em;width: var(--slide-width);padding-top:1.5em;">NOTE: These are all possible VMs. If the current lab does not have a VM running yet or will not start a VM, nothing will happen when trying to view the VM's output</p>
-				</section>
-				<section id="system" data-name="System">
-					<a onclick="sendThenSlide('/system?action=restart', 'chaos');">Restart the Lab</a><br />
-					<a onclick="sendThenSlide('/system?action=shutdown', 'chaos');">Shut Down the Lab</a><br />
-				</section>
 				<section id="help" data-name="Help">
 					<a href="#/about">What is this thing?</a><br />
+					<a href="#/howto">How do I use it?</a><br />
 					<a href="#/components">What are the components?</a><br />
 					<a href="#/issues">Something Isn't Working</a><br />
+				</section>
+				<section id="howto">
+                    <p style="font-size: .5em;">Navigate using the menu along the top</p>
+					<p class="font-size: .5em;">
+						<ul>
+							<li><a href="/#aboutlabs">Labs Menu</a></li>
+							<li><a href="/#aboutchaos">Chaos Menu</a></li>
+							<li><a href="/#aboutobserve">Observe Menu</a></li>
+							<li><a href="/#aboutsystem">System Menu</a></li>
+						</ul>
+					</p>
+					<a href="/#help" style="font-size: .5em;">back</a>
 				</section>
 				<section id="about">
 					<p style="font-size:.5em">
 						This is Labinator.
-						It is a mobile lab that lets you run/observe experiments.
-						It is built on cheap, slow, commodity hardware bought from the Internet and sprinkled with a bunch of 3D printed stuff.
+						It is a mobile lab built on cheap hardware bought online and sprinkled with a bunch of 3D printed stuff that lets you run/observe experiments.
 					</p>
 					<p style="font-size:.5em">
-						In its current iteration, it demonstrates the creation of a new Kubernetes cluster from scratch with Talos Linux.
+						It demonstrates the creation of a new Kubernetes cluster from scratch with Talos Linux.
 						Labinator uses freely licensed Open Source projects available on the Internet to do its work.
 					</p>
 					<p style="font-size:.5em">
-						To learn a LOT more about labinator, its history, and the build, scane the QR code next to the power supply.
+						To learn a LOT more about labinator, its history, and the build, scan the QR code next to the power supply.
 						Or, just go to <a href="">https://labinator.bitnebula.com/</a>
 					</p>
+					<a href="/#help" style="font-size: .5em;">back</a>
+				</section>
+				<section id="aboutlabs">
+					<p style="font-size: .75em;">About Labs</p>
+					<p style="font-size:.5em">
+						There are three types of labs available.
+						The <em>Virtual Machine</em> lab will start hypervisors on all six of the lab nodes and launch Talos on each.
+						The <em>Bare Metal</em> lab will launch Talos natively on all six nodes.
+						The <em>Hybrid</em> lab will launch Talos for the control plane on the top three nodes and hypervisors for the workers on the other three nodes.
+					</p>
+					<p style="font-size:.5em">
+						Labinator will automatically power stuff on and off to support the lab.
+						It will also trigger disk wipes when needed.
+					</p>
+					<a href="/#howto" style="font-size: .5em;">back</a>
+				</section>
+				<section id="aboutchaos">
+					<p style="font-size: .75em;">About Chaos</p>
+					<p style="font-size:.5em">
+						What good is a lab without experimenting?
+						The Chaos menu lets you inject a little insanity into the lab.
+						Right now you can only kill off or restart nodes to see what happens.
+					</p>
+					<p style="font-size:.5em">
+						In future versions of Labinator, we will be able to add load to the system, kill Kubernetes pods, kill VMs, etc and additional observability options will let you see how the system reacts.
+					</p>
+					<a href="/#howto" style="font-size: .5em;">back</a>
+				</section>
+				<section id="aboutobserve">
+					<p style="font-size: .75em;">About Observe</p>
+					<p style="font-size:.5em">
+						Here you will find links to a few dashboards and visibility options.
+						Since the labs will display system health on the screen of each system, most of the options here will tell you about Boss.
+						You can also see logs (better than Statusinator in the bottom right displays) for the entire lab.
+					</p>
+					<p style="font-size:.5em">
+						When you click a link, the bottom screen will display the selected option.
+					</p>
+					<a href="/#howto" style="font-size: .5em;">back</a>
+				</section>
+				<section id="aboutsystem">
+					<p style="font-size: .75em;">About System</p>
+					<p style="font-size:.5em">
+						You can turn the lab on and off with this menu.
+						Restarting the lab will restart this machine (Boss) after killing power to all of the nodes.
+						Shutting down the lab will shut down Boss after killing power.
+					</p>
+					<p style="font-size:.5em">
+						You shouldn't be able to do much damage by just yanking the power from Labinator whenever you want... but it also wouldn't hurt to shut down first.
+					</p>
+					<a href="/#howto" style="font-size: .5em;">back</a>
 				</section>
 				<section id="components">
-					<a href="/#nodes">Experiment nodes</a>
-					<a href="/#infrastructure">Infrastructure bits</a>
+					<a href="/#layout">System layout</a><br />
+					<a href="/#nodes">Experiment nodes</a><br />
+					<a href="/#infrastructure">Infrastructure bits</a><br />
+					<a href="/#help">Back</a>
 				</section>
 				<section id="nodes">
 					<table class="nodes">
@@ -301,6 +259,10 @@
 					</table>
 					<a href="/#components" style="font-size: .5em;">back</a>
 				</section>
+				<section id="layout">
+					<img class="stretch" src="assets/layout.png"/><br />
+					<a href="/#components" style="font-size: .5em;">back</a>
+				</section>
 				<section id="issues" data-autoslide="50">
 					<p class="fragment" style="padding-top: .5em;" data-autoslide="2000">To Fix Issues:</p>
                     <p class="fragment" style="font-size: .75em; color: red;" data-autoslide="2000">Turn it off and back on again</p>
@@ -311,7 +273,7 @@
 					<p class="fragment singular" style="font-size: .5em;" data-autoslide="2000">Just kidding</p>
 					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">You could also just retry the lab</p>
                     <p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Labinator is made of cheap components</p>
-					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Things go wrong often</p>
+					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Things go wrong... often</p>
 					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Just try it again after reboot</p>
 					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">There are several known issues</p>
 					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">In order of frequency, sometimes...</p>
@@ -323,8 +285,131 @@
 					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">a hypervisor freezes due to load</p>
 					<p class="fragment singular" style="font-size: .5em;" data-autoslide="5000">Relayinator doesn't know a port's state</p>
 
-					<p class="fragment singular" style="font-size: .5em;" data-autoslide="10000">Follow the QR code on the power supply for more</p>
-					<p class="fragment singular" style="font-size: .5em;">&nbsp;</p>
+					<p class="fragment singular" style="font-size: .5em;"  data-autoslide="99999999">
+						Follow the QR code on the power supply for more<br />
+						<a href="/#help">Back</a>
+					</p>
+				</section>
+
+
+
+				<section id="labs" data-name="Labs">
+					<a href="#/vms">Virtual Machines Only</a><br />
+					<a href="#/physical">Bare Metal Only</a><br />
+					<a href="#/vmsbms">VM and BM Combo</a><br />
+				</section>
+				<section id="vms">
+					<span class="small">Launch VM lab with...</span><br />
+					<a onclick="startLab('virtual-2')">2 VMs per host</a><br />
+					<a onclick="startLab('virtual-3')">3 VMs per host</a><br />
+					<a onclick="startLab('virtual-4')">4 VMs per host</a><br />
+					</section>
+				<section id="physical">
+					<span class="small">Launch Bare Metal lab...</span><br />
+					<a onclick="startLab('physical')">All six nodes</a><br />
+				</section>
+				<section id="vmsbms">
+					<span class="small">Launch Bare Metal control plane with...</span><br />
+					<a onclick="startLab('hybrid-2')">2 VMs per worker node</a><br />
+					<a onclick="startLab('hybrid-3')">3 VMs per worker node</a><br />
+					<a onclick="startLab('hybrid-4')">4 VMs per worker node</a><br />
+				</section>
+
+
+
+				<section id="chaos" data-name="Chaos">
+					<a href="#/kill-box">Kill a Box</a><br />
+					<a href="#/restart-box">Restart a Box</a><br />
+					<!--
+						<a href="#/kill-net">Kill a Box's Network</a><br />
+						<a href="#/kill-az">Kill an AZ's Network</a><br />
+					-->
+				</section>
+				<section id="kill-box">
+					<a onclick="sendThenSlide('/power?action=turnoff&port=p1', 'chaos');">Kill Box 1</a><br />
+					<a onclick="sendThenSlide('/power?action=turnoff&port=p2', 'chaos');">Kill Box 2</a><br />
+					<a onclick="sendThenSlide('/power?action=turnoff&port=p3', 'chaos');">Kill Box 3</a><br />
+					<a onclick="sendThenSlide('/power?action=turnoff&port=p4', 'chaos');">Kill Box 4</a><br />
+					<a onclick="sendThenSlide('/power?action=turnoff&port=p5', 'chaos');">Kill Box 5</a><br />
+					<a onclick="sendThenSlide('/power?action=turnoff&port=p6', 'chaos');">Kill Box 6</a><br />
+				</section>
+				<section id="restart-box">
+					<a onclick="sendThenSlide('/power?action=restart&port=p1', 'chaos');">Restart Box 1</a><br />
+					<a onclick="sendThenSlide('/power?action=restart&port=p2', 'chaos');">Restart Box 2</a><br />
+					<a onclick="sendThenSlide('/power?action=restart&port=p3', 'chaos');">Restart Box 3</a><br />
+					<a onclick="sendThenSlide('/power?action=restart&port=p4', 'chaos');">Restart Box 4</a><br />
+					<a onclick="sendThenSlide('/power?action=restart&port=p5', 'chaos');">Restart Box 5</a><br />
+					<a onclick="sendThenSlide('/power?action=restart&port=p6', 'chaos');">Restart Box 6</a><br />
+				</section>
+
+
+
+				<section id="observe" data-name="Observe">
+					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=30s');">Boss</a><br />
+					<a href="#/bosssystem">Boss - System</a><br />
+					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/k8s_views_global/kubernetes-views-global?kiosk=true&orgId=1&from=now-1h&to=now&timezone=browser&var-datasource=prometheus&var-cluster=&var-resolution=30s&refresh=30s')">Kubernetes</a><br />
+					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/logs/logs?kiosk=&orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s')">Logs</a><br />
+					<a onclick="navigateBottomWindow('http://boss.local:8080/status.html')">Lab Status</a><br />
+					<a href="#/vmvnc">VM Screens</a><br />
+				</section>
+				<section id="bosssystem">
+					<a onclick="sendThenSlide('/launch?command=htop', 'observe');">htop</a><br />
+					<a onclick="sendThenSlide('/launch?command=top', 'observe');">ttop</a><br />
+					<a onclick="sendThenSlide('/launch?command=tcpdump', 'observe');">tcpdump</a><br />
+					<a onclick="sendThenSlide('/launch?command=journal', 'observe');">system journal</a><br />
+					<a onclick="sendThenSlide('/launch?command=apache', 'observe');">Apache access log</a><br />
+				</section>
+				<section id="vmvnc">
+					<table style="font-size:.5em;">
+						<tr>
+							<th>Node1</th>
+							<th>Node2</th>
+							<th>Node3</th>
+							<th>Node4</th>
+							<th>Node5</th>
+							<th>Node6</th>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=1', 'observe');">VM1</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=1', 'observe');">VM1</a><br /></td>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=2', 'observe');">VM2</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=2', 'observe');">VM2</a><br /></td>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=3', 'observe');">VM3</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=3', 'observe');">VM3</a><br /></td>
+						</tr>
+						<tr>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=1&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=2&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=3&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=4&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=5&vm=4', 'observe');">VM4</a><br /></td>
+							<td><a onclick="sendThenSlide('/launch?command=vnc&node=6&vm=4', 'observe');">VM4</a><br /></td>
+						</tr>
+					</table>
+					<p style="font-size:.45em;width: var(--slide-width);padding-top:1.5em;">NOTE: These are all possible VMs. If the current lab does not have a VM running yet or will not start a VM, nothing will happen when trying to view the VM's output</p>
+				</section>
+
+
+
+				<section id="system" data-name="System">
+					<a onclick="sendThenSlide('/system?action=restart', 'chaos');">Restart the Lab</a><br />
+					<a onclick="sendThenSlide('/system?action=shutdown', 'chaos');">Shut Down the Lab</a><br />
 				</section>
 			</div>
 		</div>
