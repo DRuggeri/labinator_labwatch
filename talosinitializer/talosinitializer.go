@@ -230,16 +230,16 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 
 	log.Info("initializing scenario", "numHypervisors", len(hypervisors), "numNodes", len(nodeNames), "labHasPhysicalNodes", labHasPhysicalNodes, "needDiskWipe", needDiskWipe)
 
-	// We need to wipe disks first - start that now while secret generation runs
-	if needDiskWipe {
-		labMan.EnableDiskWipe()
-		pMan.TurnOn(powerman.PALL)
-		go func() {
-			for {
-				select {
-				case <-controlContext.Done():
-					return
-				case s := <-i.cbStatuses:
+	// Always consume the callbacks to avoid blocking the main loop
+	go func() {
+		log := i.log.With("operation", "initializerCallbackLoop")
+		for {
+			select {
+			case <-controlContext.Done():
+				return
+			case s := <-i.cbStatuses:
+				log.Debug("received callback")
+				if needDiskWipe {
 					tmp := true
 					for ip := range diskWipeMap {
 						if s.KVPairs[ip] == nil || s.KVPairs[ip]["wipe"] == "" {
@@ -247,15 +247,22 @@ func (i *TalosInitializer) Initialize(controlContext context.Context, scenario s
 						}
 					}
 
-					if tmp {
-						i.log.Info("disk wipes complete")
+					if tmp && !diskWipeDone {
+						// Toggle on diskWipeDone so we can continue spinning
+						// here and consuming channel messages
+						log.Info("disk wipes complete")
 						diskWipeDone = true
 						labMan.EnableLab()
-						return
 					}
 				}
 			}
-		}()
+		}
+	}()
+
+	// We need to wipe disks first - start that now while secret generation runs
+	if needDiskWipe {
+		labMan.EnableDiskWipe()
+		pMan.TurnOn(powerman.PALL)
 	}
 
 	initStatus := &InitializerStatus{
@@ -396,6 +403,18 @@ INITLOOP:
 	}
 	log.Debug("completed initialization loop")
 
+	// We're done blocking on port updates - start discarding them
+	go func() {
+		for {
+			select {
+			case <-controlContext.Done():
+				return
+			case s := <-i.portStatuses:
+				log.Debug("port status change ignored post-init", "status", s)
+			}
+		}
+	}()
+
 	// All the nodes have been reconfigured so we can now bootstrap via any control plane node
 	for name, node := range config.Nodes {
 		if node.Role == "controlplane" {
@@ -403,7 +422,7 @@ INITLOOP:
 			log.Info("bootstrapping Kubernetes through control plane node", "node", name)
 			err = BootstrapEtcd(controlContext, i.talosConfig, node.IP, scenario, i.k8sContext, log)
 			if err != nil {
-				log.Error("secret generation failed", "output", string(result))
+				log.Error("bootstrapping etcd failed", "output", string(result))
 				initStatus.Failed = true
 				i.sendStatusUpdate(*initStatus)
 				return
@@ -418,7 +437,14 @@ INITLOOP:
 
 	// Install additional stuff
 	i.updateStep(initStatus, "finalizing", log)
-	FinalizeInstall(controlContext, log)
+	err = FinalizeInstall(controlContext, log)
+	if err != nil {
+		log.Error("finalizing install failed", "output", string(result))
+		initStatus.Failed = true
+		i.sendStatusUpdate(*initStatus)
+		podWatchCancel()
+		return
+	}
 
 	i.updateStep(initStatus, "starting", log)
 	log.Info("awaiting pod starts")
@@ -550,15 +576,16 @@ func BootstrapEtcd(ctx context.Context, talosConfig string, ip string, talosCont
 	return nil
 }
 
-func FinalizeInstall(ctx context.Context, log *slog.Logger) {
+func FinalizeInstall(ctx context.Context, log *slog.Logger) error {
 	log.Info("finalizing installation with post-install script")
 	command := exec.CommandContext(ctx, "bash", "/home/boss/kube/post-install.sh")
 	result, err := command.CombinedOutput()
 	log.Debug("run result", "command", command, "error", err, "output", string(result))
 	if err != nil {
-		log.Error("fetching k8s config filed", "output", string(result))
-		return
+		log.Error("failed to run post-install.sh", "output", string(result))
+		return err
 	}
+	return nil
 }
 
 func (i *TalosInitializer) watchPods(ctx context.Context, initStatus *InitializerStatus, log *slog.Logger) {
