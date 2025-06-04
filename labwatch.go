@@ -504,7 +504,14 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 					status.Callbacks = c
 					broadcastStatusUpdate = true
 					if cbBroadcast != nil {
-						cbBroadcast <- c
+						if len(cbBroadcast) == cap(cbBroadcast) {
+							log.Error("not broadcasting callback update - channel is full", "len", len(cbBroadcast), "cap", cap(cbBroadcast))
+						} else {
+							log.Debug("broadcasting callback info")
+							cbBroadcast <- c
+							log.Debug("broadcast done")
+						}
+
 					}
 				} else {
 					log.Error("error encountered reading callback states")
@@ -514,7 +521,13 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 					status.Ports = p
 					broadcastStatusUpdate = true
 					if portBroadcast != nil {
-						portBroadcast <- p
+						if len(portBroadcast) == cap(portBroadcast) {
+							log.Error("not broadcasting port update - channel is full", "len", len(portBroadcast), "cap", cap(portBroadcast))
+						} else {
+							log.Debug("broadcasting port info")
+							portBroadcast <- p
+							log.Debug("broadcast done")
+						}
 					}
 				} else {
 					log.Error("error encountered reading port states")
