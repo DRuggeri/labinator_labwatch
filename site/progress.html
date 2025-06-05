@@ -54,7 +54,7 @@
     <link rel="stylesheet" href="plugin/highlight/monokai.css">
 </head>
 	<body>
-        <div id="cancel" class="cancel" onclick="window.location.replace('http://boss.local:8080/index.html/#labs')">🛑 Cancel</div>
+        <div id="cancel" class="cancel" onclick="window.location.replace('http://boss.local:8080/#labs')">🛑 Cancel</div>
 		<div class="reveal">
 			<div id="menu" class="slides" style="font-size: .65em">
                 <section id="secrets gen" data-autoslide="50">
@@ -73,7 +73,7 @@
                     <p class="fragment singular" data-autoslide="5000">Labinator is slow, so it can take a while</p>
                     <p class="fragment singular" data-autoslide="5000">A cluster could need more than 70 keys</p>
                     <p class="fragment singular" data-autoslide="120000">The tokens are useless after 24 hours</p>
-                    <p class="fragment singular" data-autoslide="99990000">It's taking too long ☠️Something went wrong☠️</p>
+                    <p class="fragment singular" data-autoslide="99990000" style="color:red;">☠️It's taking too long! Something went wrong☠️</p>
                 </section>
                 <section id="disk wipe" data-autoslide="50">
                     <h3>Wiping Disks</h3>
@@ -105,7 +105,7 @@
                     <p class="fragment singular" data-autoslide="5000">It doesn't get installed on the boxes</p>
                     <p class="fragment singular" data-autoslide="5000">Boss will be informed when it is done wiping</p>
                     <p class="fragment singular" data-autoslide="120000">It should be done pretty soon</p>
-                    <p class="fragment singular" data-autoslide="99990000">It's taking too long ☠️Something went wrong☠️</p>
+                    <p class="fragment singular" data-autoslide="99990000" style="color:red;">☠️It's taking too long! Something went wrong☠️</p>
                 </section>
                 <section id="powerup">
                     <h3>Power Is On!</h3>
@@ -144,7 +144,7 @@
                     <p class="fragment singular" data-autoslide="5000">Talos VM disk images are pulled in advance</p>
                     <p class="fragment singular" data-autoslide="5000">Labwatch will start VMs on the hypervisors</p>
                     <p class="fragment singular" data-autoslide="120000">Hypervisors should be up soon</p>
-                    <p class="fragment singular" data-autoslide="99990000">It's taking too long ☠️Something went wrong☠️</p>
+                    <p class="fragment singular" data-autoslide="99990000" style="color:red;">☠️It's taking too long! Something went wrong☠️</p>
                 </section>
                 <section id="booting-nodes" data-autoslide="50">
                     <h3>Booting Nodes</h3>
@@ -178,7 +178,7 @@
                     <p class="fragment singular" data-autoslide="5000">One node needs to be bootstrapped first</p>
                     <p class="fragment singular" data-autoslide="5000">After first bootstrap, the cluster forms</p>
                     <p class="fragment singular" data-autoslide="120000">We will bootstrap soon now</p>
-                    <p class="fragment singular" data-autoslide="99990000">It's taking too long ☠️Something went wrong☠️</p>
+                    <p class="fragment singular" data-autoslide="99990000" style="color:red;">☠️It's taking too long! Something went wrong☠️</p>
                 </section>
                 <section id="bootstrapping" data-autoslide="50">
                     <h3>Bootstrapping</h3>
@@ -193,7 +193,7 @@
                     <p class="fragment singular" data-autoslide="5000">All nodes support read operations</p>
                     <p class="fragment singular" data-autoslide="5000">The cluster settles with workers and CP nodes</p>
                     <p class="fragment singular" data-autoslide="120000">We are just about there</p>
-                    <p class="fragment singular" data-autoslide="99990000">It's taking too long ☠️Something went wrong☠️</p>
+                    <p class="fragment singular" data-autoslide="99990000" style="color:red;">☠️It's taking too long! Something went wrong☠️</p>
                 </section>
                 <section id="finalizing" data-autoslide="50">
                     <h3>Finalizing</h3>
@@ -232,7 +232,7 @@
                     <p class="fragment singular" data-autoslide="5000">This is the K8S view rather than the node</p>
                     <p class="fragment singular" data-autoslide="10000">Having both lets us see scheduling pressure</p>
                     <p class="fragment singular" data-autoslide="120000">We're almost done deploying</p>
-                    <p class="fragment singular" data-autoslide="99990000">It's taking too long ☠️Something went wrong☠️</p>
+                    <p class="fragment singular" data-autoslide="99990000" style="color:red;">☠️It's taking too long! Something went wrong☠️</p>
                 </section>
                 <section id="starting" data-autoslide="50">
                     <h3>Starting</h3>
@@ -247,12 +247,12 @@
                     <p class="fragment singular" data-autoslide="5000">coredns provides cluster DNS resolution</p>
                     <p class="fragment singular" data-autoslide="2000">It forwards non-cluster queries externally</p>
                     <p class="fragment singular" data-autoslide="120000">Almost there - not much more to do</p>
-                    <p class="fragment singular" data-autoslide="99990000">It's taking too long ☠️Something went wrong☠️</p>
+                    <p class="fragment singular" data-autoslide="99990000" style="color:red;">☠️It's taking too long! Something went wrong☠️</p>
                 </section>
                 <section id="done" data-state="doneSlide">
                     <h3>Done!</h3>
                     <p class="fragment" data-autoslide="1000">We are all set!</p>
-                    <p>Heading back to <a href="index.html/#labs">landing</a></p>
+                    <p>Heading back to <a href="/#labs">landing</a></p>
                 </section>
                 <section id="failure" data-background-image="assets/fire.gif">
                     <h2 style="color:red;">☠️ARGHHH!☠️</h2>
@@ -260,7 +260,7 @@
                     <p>Something failed</p>
                     <p>We could not complete the <span id="CurrentStep">current</span> step</p>
                     <p>&nbsp;</p>
-                    <p>Head back to the <a href="index.html/#labs">main</a> page?</p>
+                    <p>Head back to the <a href="/#labs">main</a> page?</p>
                 </section>
 			</div>
 		</div>
