@@ -134,6 +134,11 @@
         </table>
     </div>
 
+    <div id="endpoints">
+        <h3>Endpoints</h3>
+        <p id="endpointstatus"></p>
+    </div>
+
     <script>
         const socket = new WebSocket('ws://localhost:8080/status');
         receivedEvents = 0
@@ -172,7 +177,12 @@
                         el.innerHTML = v
                     }
                 }
-                //document.getElementById('Endpoints').innerHTML = data['ports'].length
+
+                pile = ''
+                for (const [k, v] of Object.entries(data['ports'])) {
+                    pile = pile + '<span style="color:' + (v ? 'white' : 'gray') + '">' + k + '</span> '
+                }
+                document.getElementById('endpointstatus').innerHTML = pile
             } catch (error) {
                 console.log("Failed parsing JSON from status server:", error)
             }
