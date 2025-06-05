@@ -267,10 +267,17 @@
 
         <script>
             currentStep = "";
-            const socket = new WebSocket('ws://localhost:8080/status');
+            var socket = new WebSocket('ws://localhost:8080/status');
 
             socket.onopen = () => {
                 console.log('Connected to labwatch status server');
+            };
+
+            socket.onclose = () => {
+                console.log('Connection to labwatch closed:', event.code, event.reason);
+                setTimeout(function() {
+                    socket = new WebSocket('ws://localhost:8080/status');
+                }, 1000);
             };
 
             socket.onmessage = (event) => {
