@@ -21,7 +21,7 @@ function gotoSlide(target) {
         i = Reveal.getIndices( slide )
         Reveal.slide(i.h, i.v, i.f)
     } else {
-        console.log(`could not find target slide`)
+        console.log(`could not find target slide `, target)
     }
 }
 
