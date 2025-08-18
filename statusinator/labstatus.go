@@ -4,6 +4,7 @@ import (
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
+	"github.com/DRuggeri/labwatch/watchers/kubernetes"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
@@ -11,6 +12,7 @@ import (
 
 type LabStatus struct {
 	Initializer talosinitializer.InitializerStatus `json:"initializer"`
+	Kubernetes  map[string]kubernetes.PodStatus    `json:"kubernetes"`
 	Talos       map[string]talos.NodeStatus        `json:"talos"`
 	Power       powerman.PowerStatus               `json:"power"`
 	Ports       port.PortStatus                    `json:"ports"`

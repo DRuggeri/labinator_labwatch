@@ -26,6 +26,7 @@ import (
 	"github.com/DRuggeri/labwatch/statusinator"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
+	"github.com/DRuggeri/labwatch/watchers/kubernetes"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
@@ -476,6 +477,14 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 	portInfo := make(chan port.PortStatus)
 	go portWatcher.Watch(ctx, portInfo)
 
+	kubeWatcher, err := kubernetes.NewKubeWatcher("", "default", log)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	kubeInfo := make(chan map[string]kubernetes.PodStatus)
+	go kubeWatcher.Watch(ctx, kubeInfo)
+
 	log = log.With("operation", "watchloop")
 	go func() {
 		for {
@@ -503,6 +512,13 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading power status")
+				}
+			case k, ok := <-kubeInfo:
+				if ok {
+					status.Kubernetes = k
+					broadcastStatusUpdate = true
+				} else {
+					log.Error("error encountered reading kubernetes pod status")
 				}
 			case c, ok := <-cbStatus:
 				if ok {
