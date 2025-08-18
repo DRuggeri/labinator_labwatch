@@ -19,7 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DRuggeri/labwatch/browserhandler"
+	"github.com/DRuggeri/labwatch/handlers/browserhandler"
+	"github.com/DRuggeri/labwatch/handlers/loadstathandler"
 	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/statusinator"
@@ -374,6 +375,10 @@ func main() {
 		}
 		wMan.StartWindow(mainCtx, cmd, wm.WMScreenBottom)
 	})
+
+	loadStatReceiveHandler, loadStatSendHandler, err := loadstathandler.NewStatHandlers(mainCtx, log)
+	http.Handle("/loadstats", loadStatReceiveHandler)
+	http.Handle("/loadinfo", loadStatSendHandler)
 
 	fsys, err := fs.Sub(siteFS, "site")
 	if err != nil {
