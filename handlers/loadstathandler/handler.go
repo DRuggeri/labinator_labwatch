@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -27,8 +28,17 @@ type LoadStatSendHandler struct {
 }
 
 type LoadStats struct {
-	Total   int
-	Clients map[string]int
+	TotalServerOk  int
+	TotalServerNok int
+	TotalClientOk  int
+	TotalClientNok int
+	Servers        map[string]OKNOK
+	Clients        map[string]OKNOK
+}
+
+type OKNOK struct {
+	OK  int
+	NOK int
 }
 
 var u = websocket.Upgrader{
@@ -54,8 +64,9 @@ func NewStatHandlers(controlContext context.Context, l *slog.Logger) (*LoadStatR
 		}
 	}()
 
+	stats := &LoadStats{TotalServerOk: 0, Clients: make(map[string]OKNOK), Servers: make(map[string]OKNOK)}
 	receiveHandler := &LoadStatReceiveHandler{
-		stats:    &LoadStats{Total: 0, Clients: make(map[string]int)},
+		stats:    stats,
 		statChan: incomingStatChan,
 		clients:  clients,
 		log:      *l.With("operation", "LoadStatHandler"),
@@ -91,21 +102,38 @@ func (h *LoadStatReceiveHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	defer conn.Close()
 
-	last := 0
+	stat := OKNOK{OK: 0, NOK: 0}
 
 	_, tmp, err := conn.ReadMessage()
 	if err != nil {
 		h.log.Debug("read error", "error", err.Error())
 		return
 	}
-	podName := string(tmp)
+	input := strings.Split(string(tmp), ":")
+	if len(input) != 2 {
+		h.log.Warn("invalid initial message received", "message", string(tmp))
+		return
+	}
+
+	podType := input[0]
+	podName := input[1]
+	server := podType == "server"
 
 	h.mux.Lock()
-	h.stats.Clients[podName] = 0
+	if server {
+		h.stats.Servers[podName] = OKNOK{OK: 0, NOK: 0}
+	} else {
+		h.stats.Clients[podName] = OKNOK{OK: 0, NOK: 0}
+	}
+
 	h.mux.Unlock()
 	defer func() {
 		h.mux.Lock()
-		delete(h.stats.Clients, podName)
+		if server {
+			delete(h.stats.Servers, podName)
+		} else {
+			delete(h.stats.Clients, podName)
+		}
 		h.mux.Unlock()
 	}()
 
@@ -116,22 +144,41 @@ func (h *LoadStatReceiveHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			break
 		}
 
-		total, err := strconv.Atoi(string(message))
+		input := strings.Split(string(message), ",")
+		if len(input) != 2 {
+			h.log.Warn("invalid message received", "message", string(message))
+			continue
+		}
+		ok, err := strconv.Atoi(input[0])
+		if err != nil {
+			h.log.Warn("invalid message received", "message", string(message), "error", err.Error())
+			continue
+		}
+		nok, err := strconv.Atoi(input[1])
 		if err != nil {
 			h.log.Warn("invalid message received", "message", string(message), "error", err.Error())
 			continue
 		}
 
-		if total == last {
+		if ok == stat.OK && nok == stat.NOK {
 			continue
 		}
 
-		increment := total - last
-		last = total
+		incrementOk := ok - stat.OK
+		incrementNok := nok - stat.NOK
+		stat.OK = ok
+		stat.NOK = nok
 
 		h.mux.Lock()
-		h.stats.Total += increment
-		h.stats.Clients[podName] = total
+		if server {
+			h.stats.TotalServerOk += incrementOk
+			h.stats.TotalServerNok += incrementNok
+			h.stats.Servers[podName] = stat
+		} else {
+			h.stats.TotalClientOk += incrementOk
+			h.stats.TotalClientNok += incrementNok
+			h.stats.Clients[podName] = stat
+		}
 		h.mux.Unlock()
 		h.statChan <- *h.stats
 	}
