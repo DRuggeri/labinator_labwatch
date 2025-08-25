@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab Status</title>
+    <style>
+        body {
+            font-family: Source Sans Pro, Helvetica, sans-serif;
+            background-color: #191919;
+            color: #ffffff;
+        }
+        h1 h2 h3 h4 h5 {
+            color: #ffffff;
+        }
+        td, th {
+            border: 1px solid #686868;
+            padding: 1px 5px 1px 5px;
+        }
+        table {
+            border-collapse: collapse;
+        }
+        img.logo {
+            position: fixed;
+            top: 0px;
+            right: 0px;
+            padding: 15px;
+            height: 128px;
+        }
+    </style>
+    <!-- https://unpkg.com/chart.js@2.8.0/dist/Chart.bundle.js -->
+    <script src="/js/Chart.bundle.js"></script>
+    <!-- https://unpkg.com/chartjs-gauge@0.3.0/dist/chartjs-gauge.js -->
+    <script src="/js/chartjs-gauge.js"></script>
+</head>
+<body>
+    <h1>Load Status</h1>
+    <img class="logo" src="assets/logo-white.svg" />
+
+    <div id="overview" style="display:flex; flex-direction: row; align-items: center;">
+        <div id="summary">
+            <table>
+                <tr>
+                    <th colspan="2">Totals - Clients</th>
+                    <th colspan="2">Totals - Servers</th>
+                    <th colspan="2">Rates - Clients</th>
+                    <th colspan="2">Rates - Servers</th>
+                </tr>
+                <tr>
+                    <th>OK</th>
+                    <th>Error</th>
+                    <th>OK</th>
+                    <th>Error</th>
+                    <th>OK</th>
+                    <th>Error</th>
+                    <th>OK</th>
+                    <th>Error</th>
+                </tr>
+                <tr>
+                    <td><span id="TotalClientOk">0</span></td>
+                    <td><span id="TotalClientNok">0</span></td>
+                    <td><span id="TotalServerOk">0</span></td>
+                    <td><span id="TotalServerNok">0</span></td>
+                    <td><span id="ClientOkRate">0</span></td>
+                    <td><span id="ClientNokRate">0</span></td>
+                    <td><span id="ServerOkRate">0</span></td>
+                    <td><span id="ServerNokRate">0</span></td>
+                </tr>
+            </table>
+        </div>
+
+        <div id="gauges">
+            <div style="text-align: center;">
+                <canvas id="serverOkGauge" width="300" height="125"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="cluster-top" style="display:flex; flex-direction: row; align-items: center;">
+        <div id="node1">
+        </div>
+        <div id="node3">
+        </div>
+        <div id="node5">
+        </div>
+    </div>
+
+    <div id="cluster-bottom" style="display:flex; flex-direction: row; align-items: center;">
+        <div id="node2">
+        </div>
+        <div id="node4">
+        </div>
+        <div id="node6">
+        </div>
+    </div>
+
+    <script>
+        // Chart.js Gauge configuration using chartjs-gauge
+        const gaugeConfig = {
+            minValue: 0,
+            maxValue: 4000,
+            redZone: 500,
+            yellowZone: 1250
+        };
+
+        function createGauge(ctx, label) {
+            return new Chart(ctx, {
+                type: 'gauge',
+                data: {
+                    datasets: [{
+                        value: 0,
+                        minValue: gaugeConfig.minValue,
+                        data: [
+                            gaugeConfig.redZone,
+                            gaugeConfig.yellowZone,
+                            gaugeConfig.maxValue
+                        ],
+                        backgroundColor: ['red', 'yellow', 'green'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: label
+                    },
+                    layout: {
+                        padding: {
+                            bottom: 30
+                        }
+                    },
+                    needle: {
+                        // Needle circle radius as the percentage of the chart area width
+                        radiusPercentage: 2,
+                        // Needle width as the percentage of the chart area width
+                        widthPercentage: 3.2,
+                        // Needle length as the percentage of the interval between inner radius (0%) and outer radius (100%) of the arc
+                        lengthPercentage: 80,
+                        // The color of the needle
+                        color: 'rgba(0, 0, 0, 1)'
+                    },
+                    valueLabel: {
+                        formatter: Math.round
+                    }
+                }
+            });
+        }
+
+        const serverOkGauge = createGauge(document.getElementById('serverOkGauge').getContext('2d'), 'Server OK Rate');
+
+        // Example update function. Replace with your actual data update logic.
+        function updateGauges(serverOkRate, serverNokRate) {
+            serverOkGauge.data.datasets[0].value = serverOkRate;
+            serverOkGauge.update();
+            serverNokGauge.data.datasets[0].value = serverNokRate;
+            serverNokGauge.update();
+        }
+    </script>
+
+    <script>
+        const socket = new WebSocket('ws://localhost:8080/loadinfo');
+        receivedEvents = 0
+
+        socket.onopen = () => {
+            console.log('Connected to labwatch loadinfo server');
+        };
+
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data)
+
+                for (const [k, v] of Object.entries(data)) {
+                    const el = document.getElementById(k)
+                    if ( el != null ) {
+                        el.innerHTML = v
+                    }
+                }
+
+                updateGauges(data['ServerOkRate'], data['ServerNokRate'])
+            } catch (error) {
+                console.log("Failed parsing JSON from status server:", error)
+            }
+
+        };
+
+        socket.onclose = () => {
+            console.log('Disconnected from labwatch status server');
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+    </script>
+</body>
+</html>
