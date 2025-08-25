@@ -381,6 +381,20 @@ func main() {
 	http.Handle("/loadstats", loadStatReceiveHandler)
 	http.Handle("/loadinfo", loadStatSendHandler)
 
+	http.HandleFunc("/scenarios", func(w http.ResponseWriter, r *http.Request) {
+		input, err := os.ReadFile(cfg.TalosScenarioConfig)
+		if err != nil {
+			log.Error("failed to read scenario config file", "error", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		var data interface{}
+		yaml.Unmarshal(input, &data)
+		b, _ := json.Marshal(data)
+		w.WriteHeader(http.StatusOK)
+		w.Write(b)
+	})
+
 	fsys, err := fs.Sub(siteFS, "site")
 	if err != nil {
 		log.Error("failed to set up site", "error", err.Error())
