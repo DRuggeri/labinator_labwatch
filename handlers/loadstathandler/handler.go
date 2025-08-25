@@ -8,10 +8,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
+
+var rateTickerInterval = time.Millisecond * 100
+
+const emaAlpha = 0.2 // Smoothing factor for EMA
 
 type LoadStatReceiveHandler struct {
 	stats    *LoadStats
@@ -32,6 +37,10 @@ type LoadStats struct {
 	TotalServerNok int
 	TotalClientOk  int
 	TotalClientNok int
+	ServerOkRate   int
+	ServerNokRate  int
+	ClientOkRate   int
+	ClientNokRate  int
 	Servers        map[string]OKNOK
 	Clients        map[string]OKNOK
 }
@@ -50,6 +59,7 @@ var u = websocket.Upgrader{
 func NewStatHandlers(controlContext context.Context, l *slog.Logger) (*LoadStatReceiveHandler, *LoadStatSendHandler, error) {
 	incomingStatChan := make(chan LoadStats, 5)
 	clients := make(map[string]chan<- LoadStats)
+	mux := &sync.Mutex{}
 
 	go func() {
 		for {
@@ -64,14 +74,46 @@ func NewStatHandlers(controlContext context.Context, l *slog.Logger) (*LoadStatR
 		}
 	}()
 
-	stats := &LoadStats{TotalServerOk: 0, Clients: make(map[string]OKNOK), Servers: make(map[string]OKNOK)}
+	stats := &LoadStats{Clients: make(map[string]OKNOK), Servers: make(map[string]OKNOK)}
 	receiveHandler := &LoadStatReceiveHandler{
 		stats:    stats,
 		statChan: incomingStatChan,
 		clients:  clients,
 		log:      *l.With("operation", "LoadStatHandler"),
-		mux:      &sync.Mutex{},
+		mux:      mux,
 	}
+
+	go func() {
+		ticker := time.NewTicker(rateTickerInterval)
+		defer ticker.Stop()
+		var prev LoadStats
+		var prevTime = time.Now()
+		for {
+			select {
+			case <-controlContext.Done():
+				return
+			case <-ticker.C:
+				mux.Lock()
+				now := time.Now()
+				elapsed := now.Sub(prevTime).Seconds()
+				if elapsed > 0 {
+					rawServerOkRate := float64(stats.TotalServerOk-prev.TotalServerOk) / elapsed
+					rawServerNokRate := float64(stats.TotalServerNok-prev.TotalServerNok) / elapsed
+					rawClientOkRate := float64(stats.TotalClientOk-prev.TotalClientOk) / elapsed
+					rawClientNokRate := float64(stats.TotalClientNok-prev.TotalClientNok) / elapsed
+
+					// EMA smoothing
+					stats.ServerOkRate = int(emaAlpha*rawServerOkRate + (1-emaAlpha)*float64(stats.ServerOkRate))
+					stats.ServerNokRate = int(emaAlpha*rawServerNokRate + (1-emaAlpha)*float64(stats.ServerNokRate))
+					stats.ClientOkRate = int(emaAlpha*rawClientOkRate + (1-emaAlpha)*float64(stats.ClientOkRate))
+					stats.ClientNokRate = int(emaAlpha*rawClientNokRate + (1-emaAlpha)*float64(stats.ClientNokRate))
+				}
+				prev = *stats
+				prevTime = now
+				mux.Unlock()
+			}
+		}
+	}()
 
 	return receiveHandler,
 		&LoadStatSendHandler{
@@ -209,10 +251,13 @@ func (h *LoadStatSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		case <-h.controlContext.Done():
 			return
 		case stat := <-ch:
+			h.mainHandler.mux.Lock()
 			if err := conn.WriteJSON(stat); err != nil {
 				h.log.Debug("write error", "error", err.Error())
+				h.mainHandler.mux.Unlock()
 				return
 			}
+			h.mainHandler.mux.Unlock()
 		case <-r.Context().Done():
 			return
 		}
