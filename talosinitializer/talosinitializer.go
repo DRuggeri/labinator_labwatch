@@ -142,6 +142,11 @@ func (i *TalosInitializer) GetStatusUpdateChan() <-chan InitializerStatus {
 	return i.statusChan
 }
 
+func (i *TalosInitializer) GetLastLab() string {
+	lastLab, _ := os.ReadFile(i.lastLabFile)
+	return string(lastLab)
+}
+
 func (i *TalosInitializer) updateStep(s *InitializerStatus, step string, log *slog.Logger) {
 	if s.CurrentStep == step {
 		return

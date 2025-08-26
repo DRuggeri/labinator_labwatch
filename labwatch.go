@@ -182,16 +182,21 @@ func main() {
 	})
 
 	http.HandleFunc("/getlab", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(activeLab))
 	})
 
-	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
-		// Already running a lab? Bail on it
-		if initializerCancel != nil {
-			initializerCancel()
+	http.HandleFunc("/lastlab", func(w http.ResponseWriter, r *http.Request) {
+		lastLab := initializer.GetLastLab()
+		if lastLab == "" {
+			log.Error("failed to get last lab")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
+		w.Write([]byte(lastLab))
+	})
 
+	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
+		adopt := false
 		defer func() {
 			if err := recover(); err != nil { //catch
 				log.Error("failed setting lab", "error", err, "stack", debug.Stack())
@@ -204,6 +209,16 @@ func main() {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		if adopt = r.URL.Query().Get("adopt") == "true"; adopt {
+			lab = initializer.GetLastLab()
+			log.Info("adopting running lab", "lab", lab)
+		}
+
+		if lab == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		endpoints, err := initializer.GetWatchEndpoints(lab)
 		if err != nil {
 			log.Info("could not get endpoints", "lab", lab, "error", err)
@@ -217,6 +232,18 @@ func main() {
 		}
 
 		activeLab = lab
+
+		// Check if we are just "adopting" an already running lab
+		if adopt {
+			resetWatchers()
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Already running a lab? Bail on it
+		if initializerCancel != nil {
+			initializerCancel()
+		}
 
 		log.Info("configuring lab", "lab", activeLab, "numWatchEndpoints", len(endpoints))
 		labMan := lablinkmanager.NewLinkManager(cfg.NetbootFolder, cfg.NetbootLink, activeLab)
@@ -390,6 +417,35 @@ func main() {
 		}
 		var data interface{}
 		yaml.Unmarshal(input, &data)
+
+		var scenarioName string
+		if r.URL.Query().Get("current") == "true" {
+			scenarioName = activeLab
+		}
+
+		if r.URL.Query().Get("last") == "true" {
+			scenarioName = initializer.GetLastLab()
+		}
+
+		if tmp := r.URL.Query().Get("name"); tmp != "" {
+			scenarioName = tmp
+		}
+
+		if scenarioName != "" {
+			tmp, ok := data.(map[string]interface{})
+			if !ok {
+				log.Info("could not parse scenario config file")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if tmp2, ok := tmp[scenarioName]; ok {
+				data = tmp2
+			} else {
+				log.Info("requested scenario not found", "name", scenarioName)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
 		b, _ := json.Marshal(data)
 		w.WriteHeader(http.StatusOK)
 		w.Write(b)
