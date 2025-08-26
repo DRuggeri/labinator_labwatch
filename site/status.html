@@ -25,13 +25,27 @@
             padding: 15px;
             height: 128px;
         }
+        .connection-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .connection-indicator.connected {
+            background-color: green;
+        }
+        .connection-indicator.disconnected {
+            background-color: red;
+        }
     </style>
 </head>
 <body>
     <h1>Lab Status</h1>
     <img class="logo" src="assets/logo-white.svg" />
     <div id="overview">
-        Status Events: <span id="receivedEvents"></span>
+        <span class="connection-indicator disconnected" id="connectionIndicator"></span>Status Events: <span id="receivedEvents"></span>
     </div>
 
     <div id="power">
@@ -140,62 +154,73 @@
     </div>
 
     <script>
-        const socket = new WebSocket('ws://localhost:8080/status');
-        receivedEvents = 0
+        let socket;
+        let receivedEvents = 0;
 
-        socket.onopen = () => {
-            console.log('Connected to labwatch status server');
-        };
+        function connectSocket() {
+            socket = new WebSocket('ws://localhost:8080/status');
 
-        socket.onmessage = (event) => {
-            document.getElementById("receivedEvents").innerHTML = receivedEvents++
-            try {
-                const data = JSON.parse(event.data)
-                for (const [k, v] of Object.entries(data['power'])) {
-                    const el = document.getElementById(k)
-                    if ( el != null ) {
-                        if ( v ) {
-                            el.innerHTML = "On"
-                            el.className = "powerOn"
-                        } else {
-                            el.innerHTML = "Off"
-                            el.className = "powerOf"
+            socket.onopen = () => {
+                console.log('Connected to labwatch status server');
+                document.getElementById('connectionIndicator').className = 'connection-indicator connected';
+            };
+
+            socket.onmessage = (event) => {
+                document.getElementById("receivedEvents").innerHTML = receivedEvents++
+                try {
+                    const data = JSON.parse(event.data)
+                    for (const [k, v] of Object.entries(data['power'])) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            if ( v ) {
+                                el.innerHTML = "On"
+                                el.className = "powerOn"
+                            } else {
+                                el.innerHTML = "Off"
+                                el.className = "powerOf"
+                            }
                         }
                     }
-                }
 
-                for (const [k, v] of Object.entries(data['logs'])) {
-                    const el = document.getElementById(k)
-                    if ( el != null ) {
-                        el.innerHTML = v
+                    for (const [k, v] of Object.entries(data['logs'])) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            el.innerHTML = v
+                        }
                     }
-                }
 
-                for (const [k, v] of Object.entries(data['initializer'])) {
-                    const el = document.getElementById(k)
-                    if ( el != null ) {
-                        el.innerHTML = v
+                    for (const [k, v] of Object.entries(data['initializer'])) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            el.innerHTML = v
+                        }
                     }
+
+                    pile = ''
+                    for (const [k, v] of Object.entries(data['ports'])) {
+                        pile = pile + '<span style="color:' + (v ? 'white' : 'gray') + '">' + k + '</span> '
+                    }
+                    document.getElementById('endpointstatus').innerHTML = pile
+                } catch (error) {
+                    console.log("Failed parsing JSON from status server:", error)
                 }
+            };
 
-                pile = ''
-                for (const [k, v] of Object.entries(data['ports'])) {
-                    pile = pile + '<span style="color:' + (v ? 'white' : 'gray') + '">' + k + '</span> '
-                }
-                document.getElementById('endpointstatus').innerHTML = pile
-            } catch (error) {
-                console.log("Failed parsing JSON from status server:", error)
-            }
+            socket.onclose = () => {
+                console.log('Disconnected from labwatch status server - reconnecting in 5 seconds...');
+                document.getElementById('connectionIndicator').className = 'connection-indicator disconnected';
+                setTimeout(connectSocket, 5000);
+            };
 
-        };
+            socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('connectionIndicator').className = 'connection-indicator disconnected';
+                socket.close();
+            };
+        }
 
-        socket.onclose = () => {
-            console.log('Disconnected from labwatch status server');
-        };
-
-        socket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
+        // Initial connection
+        connectSocket();
     </script>
 </body>
 </html>
