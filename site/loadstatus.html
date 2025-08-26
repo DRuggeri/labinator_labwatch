@@ -75,6 +75,9 @@
         .connection-status {
             margin-right: 20px;
         }
+        .container-status {
+            margin-right: 20px;
+        }
         .cluster-container {
             display: flex;
             flex-direction: row;
@@ -130,10 +133,10 @@
             <span class="connection-indicator disconnected" id="statusConnectionIndicator"></span>Status
         </div>
         <div class="container-status">
-            <span class="container-count" id="clientContainerCount">?</span>Clients
+            <span class="container-count" id="clientContainerCount">?</span> Clients
         </div>
         <div class="container-status">
-            <span class="container-count" id="serverContainerCount">?</span>Servers
+            <span class="container-count" id="serverContainerCount">?</span> Servers
         </div>
     </div>
     <img class="logo" src="assets/logo-white.svg" />
@@ -226,7 +229,7 @@
 
             filters[filterType] = !filters[filterType]
             updateFilterVisualState()
-            console.log('Filter states:', filters);
+            updateNodeContainerCounts(statusContainers)
         }
 
         function updateFilterVisualState() {
@@ -270,6 +273,8 @@
 
         function updateNodeContainerCounts(containers) {
             statusContainers = containers
+            var clientCount = 0
+            var serverCount = 0
             var update = {}
 
             // Nodes we saw after reading config
@@ -277,8 +282,31 @@
                update[nodeName] = {ok: 0, nok: 0}
             }
 
-            for (const [k, podInfo] of Object.entries(containers)) {
+            for (const [podName, podInfo] of Object.entries(containers)) {
                 nodeName = podInfo['Node']
+
+                switch(podInfo['Namespace']) {
+                case 'default':
+                    if (podName.startsWith('counterclient')) {
+                        clientCount += 1
+                        if (!filters['clients']) { continue }
+                    } else if (podName.startsWith('counterserver')) {
+                        serverCount += 1
+                        if (!filters['servers']) { continue }
+                    }
+                    break
+                case 'kube-prometheus-stack':
+                    if (!filters['monitoring']) { continue }
+                    break
+                case 'kube-system':
+                    if (!filters['system']) { continue }
+                    break
+                default:
+                    if (!filters['other']) { continue }
+                    break
+                }
+                
+
                 if (update[nodeName] != null) {
                     if (podInfo['Status'] == 'Running') {
                         update[nodeName].ok += 1
@@ -294,6 +322,9 @@
                     labNodes[nodeName].nok.innerHTML = counts.nok
                 }
             }
+
+            document.getElementById('clientContainerCount').innerHTML = clientCount
+            document.getElementById('serverContainerCount').innerHTML = serverCount
         }
     </script>
 
