@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/DRuggeri/labwatch/handlers/browserhandler"
+	"github.com/DRuggeri/labwatch/handlers/eventhandler"
 	"github.com/DRuggeri/labwatch/handlers/loadstathandler"
+	"github.com/DRuggeri/labwatch/handlers/statushandler"
 	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/statusinator"
@@ -32,8 +34,6 @@ import (
 	"github.com/DRuggeri/labwatch/watchers/talos"
 	"github.com/DRuggeri/labwatch/wm"
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v3"
 
 	_ "net/http/pprof"
@@ -64,8 +64,6 @@ type LabwatchConfig struct {
 }
 
 var currentStatus = statusinator.LabStatus{}
-var statusClients = map[string]chan<- statusinator.LabStatus{}
-var eventClients = map[string]chan<- loki.LogEvent{}
 var lock = &sync.Mutex{}
 
 func main() {
@@ -140,10 +138,25 @@ func main() {
 		log.Error("failed to create the power manager", "error", err.Error())
 		os.Exit(1)
 	}
+
+	// Create status and event handlers
+	statusWatcher, statusHandler, err := statushandler.NewStatusWatcher(mainCtx, log)
+	if err != nil {
+		log.Error("failed to create status handlers", "error", err.Error())
+		os.Exit(1)
+	}
+
+	eventReceiveHandler, eventSendHandler, err := eventhandler.NewEventWatcher(mainCtx, log)
+	if err != nil {
+		log.Error("failed to create event handlers", "error", err.Error())
+		os.Exit(1)
+	}
+
+	// Set up statusinator with the handlers
 	statusinatorStatusChan := make(chan statusinator.LabStatus, 2)
-	addStatusClient("statusinator", statusinatorStatusChan)
+	statusWatcher.AddClient("statusinator", statusinatorStatusChan)
 	statusinatorEventChan := make(chan loki.LogEvent, 5)
-	addEventClient("statusinator", statusinatorEventChan)
+	eventReceiveHandler.AddClient("statusinator", statusinatorEventChan)
 	go statinator.Watch(mainCtx, statusinatorStatusChan, statusinatorEventChan)
 
 	wMan := wm.NewWindowsManager(mainCtx, log)
@@ -154,16 +167,10 @@ func main() {
 
 	cbWatcher, _ := callbacks.NewCallbackWatcher(mainCtx, log)
 
-	watcherCancel, err := startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, nil, log)
+	watcherCancel, err := startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, nil, statusWatcher, eventReceiveHandler, log)
 	if err != nil {
 		log.Error("failed to start watchers", "error", err.Error())
 		os.Exit(1)
-	}
-
-	u := websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin:     func(r *http.Request) bool { return true },
 	}
 
 	http.Handle("/power", pMan)
@@ -173,7 +180,7 @@ func main() {
 		log.Info("resetting watchers")
 		watcherCancel()
 		cbWatcher.Reset()
-		watcherCancel, err = startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, initializer, log)
+		watcherCancel, err = startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, initializer, statusWatcher, eventReceiveHandler, log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
 			os.Exit(1)
@@ -307,76 +314,8 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Upgrade") == "" {
-			lock.Lock()
-			statusCopy := currentStatus
-			lock.Unlock()
-			b, _ := json.Marshal(statusCopy)
-			w.Write(b)
-			return
-		}
-
-		conn, err := u.Upgrade(w, r, nil)
-		if err != nil {
-			slog.Info("upgrade failed", "error", err.Error())
-			return
-		}
-
-		thisChan := make(chan statusinator.LabStatus)
-		uuid := uuid.New().String()
-
-		addStatusClient(uuid, thisChan)
-		defer removeStatusClient(uuid)
-
-		lock.Lock()
-		statusCopy := currentStatus
-		lock.Unlock()
-		data, _ := json.Marshal(statusCopy)
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			slog.Info("write failed", "error", err.Error())
-			return
-		}
-
-		for {
-			var status statusinator.LabStatus
-			select {
-			case <-r.Context().Done():
-				return
-			case status = <-thisChan:
-			}
-			data, _ := json.Marshal(status)
-			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-				return
-			}
-		}
-	})
-
-	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-		conn, err := u.Upgrade(w, r, nil)
-		if err != nil {
-			slog.Info("upgrade failed", "error", err.Error())
-			return
-		}
-
-		thisChan := make(chan loki.LogEvent)
-		uuid := uuid.New().String()
-
-		addEventClient(uuid, thisChan)
-		defer removeEventClient(uuid)
-
-		for {
-			select {
-			case <-r.Context().Done():
-				return
-			case e := <-thisChan:
-				data, _ := json.Marshal(e)
-				if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-					return
-				}
-			}
-		}
-	})
+	http.Handle("/status", statusHandler)
+	http.Handle("/events", eventSendHandler)
 
 	browserHandler, _ := browserhandler.NewBrowserHandler(log)
 	http.HandleFunc("/navigate", func(w http.ResponseWriter, r *http.Request) {
@@ -502,7 +441,7 @@ func main() {
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
-func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, cbWatcher *callbacks.CallbackWatcher, initializer *talosinitializer.TalosInitializer, log *slog.Logger) (context.CancelFunc, error) {
+func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, cbWatcher *callbacks.CallbackWatcher, initializer *talosinitializer.TalosInitializer, statusReceiveHandler *statushandler.StatusWatcher, eventReceiveHandler *eventhandler.EventReceiveHandler, log *slog.Logger) (context.CancelFunc, error) {
 	log = log.With("operation", "startWatchers")
 
 	var err error
@@ -648,12 +587,7 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 				}
 			case e, ok := <-events:
 				if ok {
-					if len(eventClients) > 0 {
-						log.Debug("broadcasting event", "clients", len(eventClients))
-						for _, ch := range eventClients {
-							ch <- e
-						}
-					}
+					eventReceiveHandler.BroadcastEvent(e)
 				} else {
 					log.Error("error encountered reading events")
 				}
@@ -661,44 +595,16 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 				time.Sleep(time.Millisecond * 100)
 				continue
 			}
+
 			if broadcastStatusUpdate {
 				lock.Lock()
 				currentStatus = status
 				lock.Unlock()
-				if len(statusClients) > 0 {
-					log.Debug("broadcasting status", "clients", len(statusClients))
-					for _, ch := range statusClients {
-						ch <- status
-					}
-				}
+				statusReceiveHandler.UpdateStatus(status)
 			}
 		}
 	}()
 	log.Info("watchers started", "iInfo", iInfo)
 
 	return cancel, nil
-}
-
-func addStatusClient(id string, ch chan<- statusinator.LabStatus) {
-	lock.Lock()
-	statusClients[id] = ch
-	lock.Unlock()
-}
-
-func removeStatusClient(id string) {
-	lock.Lock()
-	delete(statusClients, id)
-	lock.Unlock()
-}
-
-func addEventClient(id string, ch chan<- loki.LogEvent) {
-	lock.Lock()
-	eventClients[id] = ch
-	lock.Unlock()
-}
-
-func removeEventClient(id string) {
-	lock.Lock()
-	delete(eventClients, id)
-	lock.Unlock()
 }
