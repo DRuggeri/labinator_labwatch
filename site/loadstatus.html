@@ -25,6 +25,95 @@
             padding: 15px;
             height: 128px;
         }
+        div.labnode {
+            border: 1px solid #686868;
+            margin: 10px;
+            padding: 10px;
+        }
+        div.virtual {
+            background-color: #444444;
+            margin: 5px;
+            padding: 5px;
+            border: 1px solid #888888;
+        }
+        span.name {
+            font-weight: bold;
+        }
+        span.type {
+            font-size: .7em;
+        }
+        span.number {
+            text-align: center;
+            vertical-align: middle;
+            display: inline-block;
+            padding: 3px;
+            min-width: 1em;
+        }
+        span.ok {
+            background-color: green;
+        }
+        span.nok {
+            background-color: rgb(40, 63, 68);
+        }
+        span.hits {
+            background-color: #888888;
+        }
+        .connection-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .connection-indicator.connected {
+            background-color: green;
+        }
+        .connection-indicator.disconnected {
+            background-color: red;
+        }
+        .connection-status {
+            margin-right: 20px;
+        }
+        .cluster-container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+        }
+        .cluster-nodes {
+            flex: 1;
+        }
+        .filter-panel {
+            margin-left: 20px;
+            padding: 15px;
+            border: 1px solid #686868;
+            background-color: #2a2a2a;
+            min-width: 150px;
+        }
+        .filter-panel h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+        .filter-link {
+            display: block;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 5px 0;
+            cursor: pointer;
+            user-select: none;
+        }
+        .filter-link:hover {
+            color: #cccccc;
+        }
+        .filter-link.active {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        .filter-link.inactive {
+            color: #888888;
+            text-decoration: line-through;
+        }
     </style>
     <!-- https://unpkg.com/chart.js@2.8.0/dist/Chart.bundle.js -->
     <script src="/js/Chart.bundle.js"></script>
@@ -32,7 +121,21 @@
     <script src="/js/chartjs-gauge.js"></script>
 </head>
 <body>
-    <h1>Load Status</h1>
+    <div style="display: flex; align-items: center; margin-bottom: 20px;">
+        <h1 style="margin-right: 30px;">Load Status</h1>
+        <div class="connection-status">
+            <span class="connection-indicator disconnected" id="loadConnectionIndicator"></span>Load Info
+        </div>
+        <div class="connection-status">
+            <span class="connection-indicator disconnected" id="statusConnectionIndicator"></span>Status
+        </div>
+        <div class="container-status">
+            <span class="container-count" id="clientContainerCount">?</span>Clients
+        </div>
+        <div class="container-status">
+            <span class="container-count" id="serverContainerCount">?</span>Servers
+        </div>
+    </div>
     <img class="logo" src="assets/logo-white.svg" />
 
     <div id="overview" style="display:flex; flex-direction: row; align-items: center;">
@@ -74,23 +177,125 @@
         </div>
     </div>
 
-    <div id="cluster-top" style="display:flex; flex-direction: row; align-items: center;">
-        <div id="node1">
+    <div class="cluster-container">
+        <div class="cluster-nodes">
+            <div id="cluster-top" style="display:flex; flex-direction: row; align-items: center;">
+                <div class="labnode" id="node1">
+                </div>
+                <div class="labnode" id="node3">
+                </div>
+                <div class="labnode" id="node5">
+                </div>
+            </div>
+
+            <div id="cluster-bottom" style="display:flex; flex-direction: row; align-items: center;">
+                <div class="labnode" id="node2">
+                </div>
+                <div class="labnode" id="node4">
+                </div>
+                <div class="labnode" id="node6">
+                </div>
+            </div>
         </div>
-        <div id="node3">
-        </div>
-        <div id="node5">
+
+        <div class="filter-panel">
+            <h4>Pod Filters</h4>
+            <a class="filter-link active" id="systemFilter" onclick="toggleFilter('system')">System</a>
+            <a class="filter-link active" id="monitoringFilter" onclick="toggleFilter('monitoring')">Monitoring</a>
+            <a class="filter-link active" id="clientsFilter" onclick="toggleFilter('clients')">Clients</a>
+            <a class="filter-link active" id="serversFilter" onclick="toggleFilter('servers')">Servers</a>
         </div>
     </div>
 
-    <div id="cluster-bottom" style="display:flex; flex-direction: row; align-items: center;">
-        <div id="node2">
-        </div>
-        <div id="node4">
-        </div>
-        <div id="node6">
-        </div>
-    </div>
+
+    <script>
+        // Hold some globals for continued updates
+        var statusContainers = {}
+        var labNodes = {}
+        
+        // Filter globals
+        var filters = {
+            'system': false,
+            'monitoring': false,
+            'clients': true,
+            'servers': true,
+        }
+        
+        function toggleFilter(filterType) {
+            const filterElement = document.getElementById(filterType + 'Filter');
+
+            filters[filterType] = !filters[filterType]
+            updateFilterVisualState()
+            console.log('Filter states:', filters);
+        }
+
+        function updateFilterVisualState() {
+            for (const [filterType, isActive] of Object.entries(filters)) {
+                const filterElement = document.getElementById(filterType + 'Filter');
+                if (isActive) {
+                    filterElement.className = 'filter-link active';
+                } else {
+                    filterElement.className = 'filter-link inactive';
+                }
+            }
+        }
+        updateFilterVisualState()
+
+        function updateNodeHitCounts(counts) {
+            var update = {}
+
+            // Nodes we saw after reading config
+            for (const [nodeName, v] of Object.entries(labNodes)) {
+               update[nodeName] = 0
+            }
+
+            // Counts from the loadinfo server
+            for (const [containerName, hitCounts] of Object.entries(counts)) {
+                // Married up to the information from statusContainers
+                containerInfo = statusContainers[containerName]
+                if (containerInfo != null) {
+                    nodeName = containerInfo['Node']
+                    if (update[nodeName] != null) {
+                        update[nodeName] += hitCounts.OK
+                    }
+                }
+            }
+
+            for (const [nodeName, hits] of Object.entries(update)) {
+                if (labNodes[nodeName] != null) {
+                    labNodes[nodeName].hits.innerHTML = hits
+                }
+            }
+        }
+
+        function updateNodeContainerCounts(containers) {
+            statusContainers = containers
+            var update = {}
+
+            // Nodes we saw after reading config
+            for (const [nodeName, v] of Object.entries(labNodes)) {
+               update[nodeName] = {ok: 0, nok: 0}
+            }
+
+            for (const [k, podInfo] of Object.entries(containers)) {
+                nodeName = podInfo['Node']
+                if (update[nodeName] != null) {
+                    if (podInfo['Status'] == 'Running') {
+                        update[nodeName].ok += 1
+                    } else {
+                        update[nodeName].nok += 1
+                    }
+                }
+            }
+
+            for (const [nodeName, counts] of Object.entries(update)) {
+                if (labNodes[nodeName] != null) {
+                    labNodes[nodeName].ok.innerHTML = counts.ok
+                    labNodes[nodeName].nok.innerHTML = counts.nok
+                }
+            }
+        }
+    </script>
 
     <script>
         // Chart.js Gauge configuration using chartjs-gauge
@@ -147,48 +352,194 @@
 
         const serverOkGauge = createGauge(document.getElementById('serverOkGauge').getContext('2d'), 'Server OK Rate');
 
-        // Example update function. Replace with your actual data update logic.
         function updateGauges(serverOkRate, serverNokRate) {
             serverOkGauge.data.datasets[0].value = serverOkRate;
             serverOkGauge.update();
-            serverNokGauge.data.datasets[0].value = serverNokRate;
-            serverNokGauge.update();
         }
     </script>
 
     <script>
-        const socket = new WebSocket('ws://localhost:8080/loadinfo');
-        receivedEvents = 0
+        let loadSocket;
 
-        socket.onopen = () => {
-            console.log('Connected to labwatch loadinfo server');
-        };
+        function connectLoadSocket() {
+            loadSocket = new WebSocket('ws://localhost:8080/loadinfo');
 
-        socket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data)
+            loadSocket.onopen = () => {
+                console.log('Connected to labwatch loadinfo server');
+                document.getElementById('loadConnectionIndicator').className = 'connection-indicator connected';
+            };
 
-                for (const [k, v] of Object.entries(data)) {
-                    const el = document.getElementById(k)
-                    if ( el != null ) {
-                        el.innerHTML = v
+            loadSocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data)
+
+                    for (const [k, v] of Object.entries(data)) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            el.innerHTML = v
+                        }
                     }
+
+                    updateGauges(data['ServerOkRate'], data['ServerNokRate'])
+                    updateNodeHitCounts(data['Servers'])
+                } catch (error) {
+                    console.log("Failed parsing JSON from status server:", error)
                 }
+            };
 
-                updateGauges(data['ServerOkRate'], data['ServerNokRate'])
-            } catch (error) {
-                console.log("Failed parsing JSON from status server:", error)
-            }
+            loadSocket.onclose = () => {
+                console.log('Disconnected from labwatch loadinfo server - reconnecting in 5 seconds...');
+                document.getElementById('loadConnectionIndicator').className = 'connection-indicator disconnected';
+                setTimeout(connectLoadSocket, 5000);
+            };
 
-        };
+            loadSocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('loadConnectionIndicator').className = 'connection-indicator disconnected';
+                loadSocket.close();
+            };
+        }
 
-        socket.onclose = () => {
-            console.log('Disconnected from labwatch status server');
-        };
+        // Initial connection
+        connectLoadSocket();
+    </script>
 
-        socket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
+    <script>
+        fetch('/scenarios?last=true')
+        .then(response => response.json())
+        .then(cfg => {
+            console.log("config: %o", cfg)
+
+            ip2HypervisorName = {}
+
+            const hostTypes = [ 'physical', 'hypervisor', 'virtual' ]
+            hostTypes.forEach(type => {
+                for (let key in cfg['nodes']) {
+                    if (!cfg['nodes'].hasOwnProperty(key)) {
+                        continue
+                    }
+                    node = cfg['nodes'][key]
+
+                    if (node['type'] !== type) {
+                        continue
+                    }
+                    
+                    var parent
+                    var hasContainers = false
+                    switch(type) {
+                    case 'physical':
+                        parent = document.getElementById(node['nodename'])
+                        hasContainers = true
+                        break;
+                    case 'hypervisor':
+                        ip2HypervisorName[node['ip']] = node['name']
+                        parent = document.getElementById(node['nodename'])
+                        break;
+                    case 'virtual':
+                        hypervisorName = ip2HypervisorName[node['hypervisor']['ip']]
+                        parent = document.getElementById(hypervisorName)
+                        hasContainers = true
+                        break;
+                    }
+
+                    newDiv = document.createElement('div')
+                    newDiv.setAttribute('id', node['name'])
+                    newDiv.className = type
+
+                    newSpan = document.createElement('span')
+                    newSpan.className = 'nodename'
+                    newSpan.innerHTML = node['name']
+                    newDiv.appendChild(newSpan)
+
+                    /*
+                    newSpan = document.createElement('span')
+                    newSpan.className = 'type'
+                    newSpan.innerHTML = " (" + type + ")"
+                    newDiv.appendChild(newSpan)
+                    */
+
+                    if (hasContainers) {
+                        newSpan = document.createElement('span')
+                        newSpan.innerHTML = " - "
+                        newDiv.appendChild(newSpan)
+
+                        okSpan = document.createElement('span')
+                        okSpan.setAttribute('id', node['name'] + "-ok")
+                        okSpan.className = 'number ok'
+                        okSpan.innerHTML = 0
+                        newDiv.appendChild(okSpan)
+
+                        nokSpan = document.createElement('span')
+                        nokSpan.setAttribute('id', node['name'] + "-nok")
+                        nokSpan.className = 'number nok'
+                        nokSpan.innerHTML = 0
+                        newDiv.appendChild(nokSpan)
+
+                        hitSpan = document.createElement('span')
+                        hitSpan.setAttribute('id', node['name'] + "-hits")
+                        hitSpan.className = 'number hits'
+                        hitSpan.innerHTML = 0
+                        newDiv.appendChild(hitSpan)
+
+                        labNodes[node['name']] = {
+                            'ok': okSpan,
+                            'nok': nokSpan,
+                            'hits': hitSpan,
+                        }
+                    }
+
+                    parent.appendChild(newDiv)
+                }            
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching scenario:', error);
+        });
+    </script>
+
+    <script>
+        let statusSocket;
+
+        function connectStatusSocket() {
+            statusSocket = new WebSocket('ws://localhost:8080/status');
+
+            statusSocket.onopen = () => {
+                console.log('Connected to labwatch status server');
+                document.getElementById('statusConnectionIndicator').className = 'connection-indicator connected';
+            };
+
+            statusSocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data)
+
+                    for (const [k, v] of Object.entries(data)) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            el.innerHTML = v
+                        }
+                    }
+
+                    updateNodeContainerCounts(data['kubernetes'])
+                } catch (error) {
+                    console.log("Failed parsing JSON from status server:", error)
+                }
+            };
+
+            statusSocket.onclose = () => {
+                console.log('Disconnected from labwatch status server - reconnecting in 5 seconds...');
+                document.getElementById('statusConnectionIndicator').className = 'connection-indicator disconnected';
+                setTimeout(connectStatusSocket, 5000);
+            };
+
+            statusSocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('statusConnectionIndicator').className = 'connection-indicator disconnected';
+                statusSocket.close();
+            };
+        }
+
+        // Initial connection
+        connectStatusSocket();
     </script>
 </body>
 </html>
