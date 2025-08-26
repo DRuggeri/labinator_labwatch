@@ -29,9 +29,10 @@ type KubeWatcher struct {
 }
 
 type PodStatus struct {
-	PodName string
-	Status  string
-	Node    string
+	PodName   string
+	Namespace string
+	Status    string
+	Node      string
 }
 
 func NewKubeWatcher(configPath string, namespace string, log *slog.Logger) (*KubeWatcher, error) {
@@ -58,6 +59,7 @@ func NewKubeWatcher(configPath string, namespace string, log *slog.Logger) (*Kub
 }
 
 func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[string]PodStatus) {
+	w.log.Info("watching for pod changes", "namespace", w.namespace)
 	go func() {
 		for {
 			select {
@@ -127,8 +129,9 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 
 func podToStatus(pod *corev1.Pod) PodStatus {
 	return PodStatus{
-		PodName: pod.GetName(),
-		Status:  string(pod.Status.Phase),
-		Node:    pod.Spec.NodeName,
+		PodName:   pod.GetName(),
+		Namespace: pod.GetNamespace(),
+		Status:    string(pod.Status.Phase),
+		Node:      pod.Spec.NodeName,
 	}
 }

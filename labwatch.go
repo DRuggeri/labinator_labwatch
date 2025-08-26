@@ -60,6 +60,7 @@ type LabwatchConfig struct {
 	NetbootFolder       string `yaml:"netboot-folder"`
 	NetbootLink         string `yaml:"netboot-link"`
 	PortWatchTrace      bool   `yaml:"port-watch-trace"`
+	PodWatchNamespace   string `yaml:"pod-watch-namespace"`
 }
 
 var currentStatus = statusinator.LabStatus{}
@@ -73,6 +74,7 @@ func main() {
 	kingpin.Parse()
 
 	activeLab := ""
+	activeLabMutex := &sync.Mutex{}
 
 	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
 	switch *logLevel {
@@ -101,6 +103,7 @@ func main() {
 		TalosScenarioConfig: "/home/boss/talos/scenarios/configs.yaml",
 		TalosScenariosDir:   "/home/boss/talos/scenarios",
 		PortWatchTrace:      false,
+		PodWatchNamespace:   "",
 	}
 
 	if *config != "" {
@@ -182,7 +185,10 @@ func main() {
 	})
 
 	http.HandleFunc("/getlab", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(activeLab))
+		activeLabMutex.Lock()
+		lab := activeLab
+		activeLabMutex.Unlock()
+		w.Write([]byte(lab))
 	})
 
 	http.HandleFunc("/lastlab", func(w http.ResponseWriter, r *http.Request) {
@@ -231,7 +237,9 @@ func main() {
 			return
 		}
 
+		activeLabMutex.Lock()
 		activeLab = lab
+		activeLabMutex.Unlock()
 
 		// Check if we are just "adopting" an already running lab
 		if adopt {
@@ -290,7 +298,7 @@ func main() {
 
 		// Do the needy to this box
 		out, err := exec.Command(args[0], args[1:]...).Output()
-		log.Debug("system command run", "output", string(out), "error", err.Error())
+		log.Debug("system command run", "output", string(out), "error", err)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
@@ -301,7 +309,10 @@ func main() {
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") == "" {
-			b, _ := json.Marshal(currentStatus)
+			lock.Lock()
+			statusCopy := currentStatus
+			lock.Unlock()
+			b, _ := json.Marshal(statusCopy)
 			w.Write(b)
 			return
 		}
@@ -318,7 +329,10 @@ func main() {
 		addStatusClient(uuid, thisChan)
 		defer removeStatusClient(uuid)
 
-		data, _ := json.Marshal(currentStatus)
+		lock.Lock()
+		statusCopy := currentStatus
+		lock.Unlock()
+		data, _ := json.Marshal(statusCopy)
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			slog.Info("write failed", "error", err.Error())
 			return
@@ -420,7 +434,9 @@ func main() {
 
 		var scenarioName string
 		if r.URL.Query().Get("current") == "true" {
+			activeLabMutex.Lock()
 			scenarioName = activeLab
+			activeLabMutex.Unlock()
 		}
 
 		if r.URL.Query().Get("last") == "true" {
@@ -547,7 +563,7 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 	portInfo := make(chan port.PortStatus)
 	go portWatcher.Watch(ctx, portInfo)
 
-	kubeWatcher, err := kubernetes.NewKubeWatcher("", "default", log)
+	kubeWatcher, err := kubernetes.NewKubeWatcher("", cfg.PodWatchNamespace, log)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -645,9 +661,10 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 				time.Sleep(time.Millisecond * 100)
 				continue
 			}
-
 			if broadcastStatusUpdate {
+				lock.Lock()
 				currentStatus = status
+				lock.Unlock()
 				if len(statusClients) > 0 {
 					log.Debug("broadcasting status", "clients", len(statusClients))
 					for _, ch := range statusClients {
