@@ -77,7 +77,13 @@ func (h *EventReceiveHandler) BroadcastEvent(event loki.LogEvent) {
 				// Successfully sent
 			default:
 				// Channel full, skip this client to avoid blocking
-				h.log.Warn("event client channel full, skipping", "id", id)
+				level := slog.LevelWarn
+
+				// Statusinator is known to fall behind during lots of logging
+				if id == "statusinator" {
+					level = slog.LevelDebug
+				}
+				h.log.Log(context.Background(), level, "event client channel full, skipping", "id", id)
 			}
 		}
 	} else {
