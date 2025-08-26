@@ -63,9 +63,6 @@ type LabwatchConfig struct {
 	PodWatchNamespace   string `yaml:"pod-watch-namespace"`
 }
 
-var currentStatus = statusinator.LabStatus{}
-var lock = &sync.Mutex{}
-
 func main() {
 	kingpin.Version(Version)
 	kingpin.HelpFlag.Short('h')
@@ -597,9 +594,6 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 			}
 
 			if broadcastStatusUpdate {
-				lock.Lock()
-				currentStatus = status
-				lock.Unlock()
 				statusReceiveHandler.UpdateStatus(status)
 			}
 		}

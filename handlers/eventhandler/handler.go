@@ -15,7 +15,7 @@ import (
 type EventReceiveHandler struct {
 	log          *slog.Logger
 	clients      map[string]chan<- loki.LogEvent
-	clientsMutex sync.RWMutex
+	clientsMutex sync.Mutex
 }
 
 type EventSendHandler struct {
@@ -59,7 +59,7 @@ func (h *EventReceiveHandler) RemoveClient(id string) {
 }
 
 func (h *EventReceiveHandler) BroadcastEvent(event loki.LogEvent) {
-	h.clientsMutex.RLock()
+	h.clientsMutex.Lock()
 	if len(h.clients) > 0 {
 		h.log.Debug("broadcasting event", "clients", len(h.clients))
 
@@ -68,7 +68,7 @@ func (h *EventReceiveHandler) BroadcastEvent(event loki.LogEvent) {
 		for k, v := range h.clients {
 			clientsCopy[k] = v
 		}
-		h.clientsMutex.RUnlock()
+		h.clientsMutex.Unlock()
 
 		// Broadcast without holding the lock
 		for id, ch := range clientsCopy {
@@ -81,7 +81,7 @@ func (h *EventReceiveHandler) BroadcastEvent(event loki.LogEvent) {
 			}
 		}
 	} else {
-		h.clientsMutex.RUnlock()
+		h.clientsMutex.Unlock()
 	}
 }
 

@@ -15,7 +15,7 @@ import (
 type StatusWatcher struct {
 	log           *slog.Logger
 	clients       map[string]chan<- statusinator.LabStatus
-	clientsMutex  sync.RWMutex
+	clientsMutex  sync.Mutex
 	currentStatus statusinator.LabStatus
 	currentMutex  sync.RWMutex
 }
@@ -66,8 +66,7 @@ func (h *StatusWatcher) UpdateStatus(status statusinator.LabStatus) {
 	h.currentStatus = status
 	h.currentMutex.Unlock()
 
-	// Broadcast to all clients
-	h.clientsMutex.RLock()
+	h.clientsMutex.Lock()
 	if len(h.clients) > 0 {
 		h.log.Debug("broadcasting status", "clients", len(h.clients))
 
@@ -76,7 +75,7 @@ func (h *StatusWatcher) UpdateStatus(status statusinator.LabStatus) {
 		for k, v := range h.clients {
 			clientsCopy[k] = v
 		}
-		h.clientsMutex.RUnlock()
+		h.clientsMutex.Unlock()
 
 		// Broadcast without holding the lock
 		for id, ch := range clientsCopy {
@@ -89,7 +88,7 @@ func (h *StatusWatcher) UpdateStatus(status statusinator.LabStatus) {
 			}
 		}
 	} else {
-		h.clientsMutex.RUnlock()
+		h.clientsMutex.Unlock()
 	}
 }
 
