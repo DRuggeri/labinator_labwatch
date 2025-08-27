@@ -505,7 +505,9 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 		return nil, err
 	}
 	kubeInfo := make(chan map[string]kubernetes.PodStatus)
-	go kubeWatcher.Watch(ctx, kubeInfo)
+	if lab != "" {
+		go kubeWatcher.Watch(ctx, kubeInfo)
+	}
 
 	log = log.With("operation", "watchloop")
 	go func() {
