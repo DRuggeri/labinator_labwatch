@@ -505,6 +505,15 @@ func StartVMsOnHypervisor(ctx context.Context, ip string, nodes []NodeConfig, lo
 			)
 
 			result, err := command.CombinedOutput()
+
+			// Check if context was cancelled before processing result (resulting in an expected error)
+			select {
+			case <-ctx.Done():
+				log.Debug("context cancelled, stopping VM creation", "node", node.Name)
+				return
+			default:
+			}
+
 			if !strings.Contains(string(result), "Domain creation completed") {
 				log.Error("failed to start", "startcommand", startCommand, "error", err, "hypervisor", ip, "output", string(result))
 				time.Sleep(time.Second)
