@@ -1,0 +1,12 @@
+baseUrl: "http://boss.local:8080"
+testInterval: 5
+timeouts:
+  init: 30
+  "secret gen": 150
+  "disk wipe": 235
+  powerup: 60
+  "booting-hypervisors": 245
+  "booting-nodes": 235
+  bootstrapping: 155
+  finalizing: 255
+  starting: 156
