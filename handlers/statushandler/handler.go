@@ -84,7 +84,10 @@ func (h *StatusWatcher) UpdateStatus(status statusinator.LabStatus) {
 				// Successfully sent
 			default:
 				// Channel full, skip this client to avoid blocking
-				h.log.Warn("status client channel full, skipping", "id", id)
+				// Don't warn about statusinator which can get overwhelmed from lots of logs
+				if id != "statusinator" {
+					h.log.Warn("status client channel full, skipping", "id", id)
+				}
 			}
 		}
 	} else {
