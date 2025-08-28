@@ -30,7 +30,7 @@ import (
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/DRuggeri/labwatch/watchers/kubernetes"
-	"github.com/DRuggeri/labwatch/watchers/loki"
+	"github.com/DRuggeri/labwatch/watchers/otelfile"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
 	"github.com/DRuggeri/labwatch/wm"
@@ -52,7 +52,8 @@ var (
 type LabwatchConfig struct {
 	LokiAddress         string `yaml:"loki-address"`
 	LokiQuery           string `yaml:"loki-query"`
-	LokiTrace           bool   `yaml:"loki-trace"`
+	LogPath             string `yaml:"log-path"`
+	LogTrace            bool   `yaml:"log-trace"`
 	TalosConfigFile     string `yaml:"talos-config"`
 	TalosScenarioConfig string `yaml:"talos-scenario-config"`
 	TalosScenariosDir   string `yaml:"talos-scenarios-directory"`
@@ -90,7 +91,8 @@ func main() {
 	cfg := LabwatchConfig{
 		LokiAddress:         "boss.local:3100",
 		LokiQuery:           `{ host_name =~ ".+" } | json`,
-		LokiTrace:           false,
+		LogPath:             "/var/tmplog/otelcol.jsonl",
+		LogTrace:            false,
 		TalosConfigFile:     "/home/boss/.talos/config",
 		PowerManagerPort:    "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
 		StatusinatorPort:    "/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:3D:AE:E9:29:08-if00",
@@ -479,7 +481,8 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 		}
 	*/
 
-	lWatcher, err := loki.NewLokiWatcher(ctx, cfg.LokiAddress, cfg.LokiQuery, cfg.LokiTrace, log)
+	// lWatcher, err := loki.NewLokiWatcher(ctx, cfg.LokiAddress, cfg.LokiQuery, cfg.LokiTrace, log)
+	lWatcher, err := otelfile.NewOtelFileWatcher(ctx, cfg.LogPath, cfg.LogTrace, log)
 	if err != nil {
 		cancel()
 		return nil, err
