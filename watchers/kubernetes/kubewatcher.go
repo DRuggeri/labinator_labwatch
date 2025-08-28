@@ -60,6 +60,7 @@ func NewKubeWatcher(configPath string, namespace string, log *slog.Logger) (*Kub
 
 func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[string]PodStatus) {
 	w.log.Info("watching for pod changes", "namespace", w.namespace)
+	connected := false
 	go func() {
 		for {
 			select {
@@ -71,10 +72,15 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 
 			v, err := w.clientSet.Discovery().ServerVersion()
 			if err != nil {
-				w.log.Error("error connecting to kubernetes", "error", err)
+				// The client starts attempting to connect at the start of the lab, but it'll be a while before
+				// we can actually connect. Keep the logs quiet until we connect at least once
+				if connected {
+					w.log.Error("error connecting to kubernetes", "error", err)
+				}
 				time.Sleep(reconnectDuration)
 				continue
 			}
+			connected = true
 
 			status := make(map[string]PodStatus)
 			w.log.Info("connected to Kubernetes", "version", v.String())
