@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -18,6 +17,10 @@ import (
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type TalosInitializer struct {
@@ -65,8 +68,6 @@ type HypervisorInfo struct {
 	IP  string `yaml:"ip"`
 	MAC string `yaml:"mac"`
 }
-
-var kubectlExtractRe = regexp.MustCompile(`^(\S+)\s+(\S+)`)
 
 func NewTalosInitializer(talosConfigFile string, scenarioConfigFile string, scenarioNodesDir string, k8sContext string, log *slog.Logger) (*TalosInitializer, error) {
 	d, err := os.ReadFile(scenarioConfigFile)
@@ -603,6 +604,19 @@ func FinalizeInstall(ctx context.Context, log *slog.Logger) error {
 }
 
 func (i *TalosInitializer) watchPods(ctx context.Context, initStatus *InitializerStatus, log *slog.Logger) {
+	// Create Kubernetes client using default kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+	if err != nil {
+		log.Error("failed to build kubernetes config", "error", err)
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Error("failed to create kubernetes client", "error", err)
+		return
+	}
+
 	lastNumPods := 0
 	lastInitializedPods := 0
 
@@ -613,45 +627,32 @@ func (i *TalosInitializer) watchPods(ctx context.Context, initStatus *Initialize
 		default:
 		}
 
-		numPods := 0
-		initializedPods := 0
-
-		command := exec.Command("kubectl",
-			"get", "pods", "--all-namespaces", "--no-headers",
-			"-o=custom-columns=POD_NAME:.metadata.name,STATUS:.status.phase",
-		)
-		result, err := command.Output()
-		log.Debug("run result", "command", command, "error", err, "output", string(result))
+		// Get all pods across all namespaces
+		pods, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 		if err != nil {
-			log.Error("fetching k8s config failed", "output", string(result))
-			return
+			log.Error("failed to list pods", "error", err)
+			time.Sleep(time.Second)
+			continue
 		}
 
-		for _, line := range strings.Split(string(result), "\n") {
-			if line == "" {
-				continue
-			}
+		numPods := len(pods.Items)
+		initializedPods := 0
 
-			matches := kubectlExtractRe.FindStringSubmatch(line)
-			if len(matches) == 0 {
-				log.Error("failed to extract information from line", "line", line)
-				return
-			}
-			numPods++
-			if matches[2] == "Running" {
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == corev1.PodRunning {
 				initializedPods++
 			}
 		}
 
-		log.Debug("pod progress", "total", initStatus.NumPods, "done", initStatus.InitializedPods)
+		log.Debug("pod progress", "total", numPods, "running", initializedPods)
 		if numPods != lastNumPods || initializedPods != lastInitializedPods {
 			initStatus.NumPods = numPods
 			initStatus.InitializedPods = initializedPods
 			i.sendStatusUpdate(*initStatus)
 		}
 
-		lastNumPods = initStatus.NumPods
-		lastInitializedPods = initStatus.InitializedPods
+		lastNumPods = numPods
+		lastInitializedPods = initializedPods
 
 		time.Sleep(time.Second)
 	}
