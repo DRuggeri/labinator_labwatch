@@ -21,24 +21,59 @@ func TestOtelFileWatcher_normalizeEvents(t *testing.T) {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
 
-	// Test OTEL log record
-	testRecord := otelLogRecord{
-		Timestamp:         "2025-08-28T10:15:30.123456Z",
-		ObservedTimestamp: "2025-08-28T10:15:30.123456Z",
-		TraceID:           "abc123def456",
-		SpanID:            "def456abc123",
-		SeverityText:      "INFO",
-		SeverityNumber:    9,
-		Body:              "User logged in successfully",
-		Attributes: map[string]interface{}{
-			"user.id":     "12345",
-			"http.method": "POST",
-			"host.name":   "server01",
-		},
-		Resource: map[string]interface{}{
-			"service.name":    "auth-service",
-			"service.version": "1.0.0",
-			"host.name":       "server01",
+	// Test OTLP log record in proper format
+	testRecord := otlpLogsData{
+		ResourceLogs: []resourceLogs{
+			{
+				Resource: resource{
+					Attributes: []keyValue{
+						{
+							Key: "host.name",
+							Value: anyValue{
+								StringValue: "server01",
+							},
+						},
+						{
+							Key: "service.name",
+							Value: anyValue{
+								StringValue: "auth-service",
+							},
+						},
+					},
+				},
+				ScopeLogs: []scopeLogs{
+					{
+						Scope: scope{},
+						LogRecords: []logRecord{
+							{
+								TimeUnixNano:         "1693526130123456000",
+								ObservedTimeUnixNano: "1693526130123456000",
+								SeverityNumber:       9,
+								SeverityText:         "INFO",
+								Body: anyValue{
+									StringValue: "User logged in successfully",
+								},
+								TraceID: "abc123def456",
+								SpanID:  "def456abc123",
+								Attributes: []keyValue{
+									{
+										Key: "user.id",
+										Value: anyValue{
+											StringValue: "12345",
+										},
+									},
+									{
+										Key: "http.method",
+										Value: anyValue{
+											StringValue: "POST",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -76,8 +111,8 @@ func TestOtelFileWatcher_normalizeEvents(t *testing.T) {
 		t.Errorf("Expected user.id '12345', got '%s'", event.Attributes["user.id"])
 	}
 
-	if event.Attributes["trace_id"] != "abc123def456" {
-		t.Errorf("Expected trace_id 'abc123def456', got '%s'", event.Attributes["trace_id"])
+	if event.Attributes["traceId"] != "abc123def456" {
+		t.Errorf("Expected traceId 'abc123def456', got '%s'", event.Attributes["traceId"])
 	}
 
 	if event.Attributes["resource.service.name"] != "auth-service" {
@@ -147,7 +182,7 @@ func TestOtelFileWatcher_fileRotationDetection(t *testing.T) {
 	}
 
 	// Open the file
-	err = watcher.openFile()
+	err = watcher.openFile(false)
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}

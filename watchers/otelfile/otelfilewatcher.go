@@ -3,8 +3,8 @@ package otelfile
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -28,8 +28,9 @@ type OtelFileWatcher struct {
 	stats            common.LogStats
 	log              *slog.Logger
 	currentFile      *os.File
-	scanner          *bufio.Scanner
+	reader           *bufio.Reader
 	lastFileInfo     os.FileInfo
+	lineBuffer       []byte
 }
 
 func NewOtelFileWatcher(ctx context.Context, path string, trace bool, log *slog.Logger) (*OtelFileWatcher, error) {
@@ -46,11 +47,11 @@ func NewOtelFileWatcher(ctx context.Context, path string, trace bool, log *slog.
 	}, nil
 }
 
-func (w *OtelFileWatcher) openFile() error {
+func (w *OtelFileWatcher) openFile(tail bool) error {
 	if w.currentFile != nil {
 		w.currentFile.Close()
 		w.currentFile = nil
-		w.scanner = nil
+		w.reader = nil
 	}
 
 	file, err := os.Open(w.path)
@@ -67,13 +68,51 @@ func (w *OtelFileWatcher) openFile() error {
 
 	w.currentFile = file
 	w.lastFileInfo = info
-	w.scanner = bufio.NewScanner(file)
+	w.reader = bufio.NewReader(file)
+	w.lineBuffer = make([]byte, 0, 4096) // Initialize line buffer
 
-	// Seek to end of file to start tailing
-	w.currentFile.Seek(0, 2)
+	// Seek to end of file to start tailing on first start - otherwise, read the whole file
+	if tail {
+		w.currentFile.Seek(0, 2)
+		// Reset reader after seek
+		w.reader = bufio.NewReader(w.currentFile)
+	}
 
-	w.log.Info("opened file for tailing", "path", w.path, "size", info.Size())
+	w.log.Info("opened file for tailing", "path", w.path, "size", info.Size(), "tail", tail)
 	return nil
+}
+
+// readLine reads a complete line from the file, handling EOF gracefully for tailing
+func (w *OtelFileWatcher) readLine() (string, error) {
+	if w.reader == nil {
+		return "", fmt.Errorf("reader not initialized")
+	}
+
+	for {
+		line, err := w.reader.ReadString('\n')
+		if err == io.EOF && line != "" {
+			// We got some data but hit EOF - save it for next time and return empty for now
+			// This handles the case where a line is being written while we're reading
+			return "", io.EOF
+		}
+		if err == io.EOF {
+			// No data and EOF - this is normal for tailing, just return EOF
+			return "", io.EOF
+		}
+		if err != nil {
+			// Some other error
+			return "", err
+		}
+
+		// Remove the newline character and return the line
+		line = strings.TrimSuffix(line, "\n")
+		line = strings.TrimSuffix(line, "\r") // Handle Windows line endings too
+
+		if line != "" {
+			return line, nil
+		}
+		// Empty line, continue reading
+	}
 }
 
 func (w *OtelFileWatcher) checkFileRotation() bool {
@@ -127,9 +166,9 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 			if w.currentFile == nil || time.Since(lastFileCheck) > fileCheckDuration {
 				if w.currentFile != nil && w.checkFileRotation() {
 					w.log.Info("reopening file due to rotation")
-					w.openFile()
+					w.openFile(false)
 				} else if w.currentFile == nil {
-					if err := w.openFile(); err != nil {
+					if err := w.openFile(true); err != nil {
 						w.log.Error("failed to open file", "error", err)
 						time.Sleep(sleepDuration)
 						continue
@@ -139,36 +178,35 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 			}
 
 			// Try to read a line
-			if w.scanner.Scan() {
-				line := w.scanner.Text()
-				if line != "" {
-					w.log.Debug("read line", "length", len(line))
-					events := w.normalizeEvents([]byte(line))
-					w.log.Debug("normalized events", "count", len(events))
-
-					if len(events) > 0 {
-						for _, e := range events {
-							w.internalLogChan <- e
-						}
-						w.updateStats(events)
-						w.internalStatChan <- w.stats
-					}
-				}
-			} else {
-				// No new lines available, sleep briefly
+			line, err := w.readLine()
+			if err == io.EOF {
+				// Reached EOF - normal for tailing, just sleep and try again
 				time.Sleep(sleepDuration)
-			}
-
-			// Check for scanner errors
-			if err := w.scanner.Err(); err != nil {
-				w.log.Error("scanner error", "error", err)
+				continue
+			} else if err != nil {
+				w.log.Error("read error", "error", err)
 				// Force file reopen on next iteration
 				if w.currentFile != nil {
 					w.currentFile.Close()
 					w.currentFile = nil
-					w.scanner = nil
+					w.reader = nil
 				}
 				time.Sleep(sleepDuration)
+				continue
+			}
+
+			if line != "" {
+				w.log.Debug("read line", "length", len(line))
+				events := w.normalizeEvents([]byte(line))
+				w.log.Debug("normalized events", "count", len(events))
+
+				if len(events) > 0 {
+					for _, e := range events {
+						w.internalLogChan <- e
+					}
+					w.updateStats(events)
+					w.internalStatChan <- w.stats
+				}
 			}
 		}
 	}()
@@ -200,123 +238,6 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 
 		time.Sleep(sleepDuration)
 	}
-}
-
-/*
-OpenTelemetry log format (JSON lines):
-{
-  "timestamp": "2025-08-28T10:15:30.123456Z",
-  "observed_timestamp": "2025-08-28T10:15:30.123456Z",
-  "trace_id": "abc123def456",
-  "span_id": "def456abc123",
-  "severity_text": "INFO",
-  "severity_number": 9,
-  "body": "User logged in successfully",
-  "attributes": {
-    "service.name": "auth-service",
-    "host.name": "server01",
-    "user.id": "12345",
-    "http.method": "POST"
-  },
-  "resource": {
-    "service.name": "auth-service",
-    "service.version": "1.0.0",
-    "host.name": "server01"
-  }
-}
-*/
-
-type otelLogRecord struct {
-	Timestamp         string                 `json:"timestamp"`
-	ObservedTimestamp string                 `json:"observed_timestamp"`
-	TraceID           string                 `json:"trace_id"`
-	SpanID            string                 `json:"span_id"`
-	SeverityText      string                 `json:"severity_text"`
-	SeverityNumber    int                    `json:"severity_number"`
-	Body              string                 `json:"body"`
-	Attributes        map[string]interface{} `json:"attributes"`
-	Resource          map[string]interface{} `json:"resource"`
-}
-
-func (w *OtelFileWatcher) normalizeEvents(m []byte) []common.LogEvent {
-	ret := []common.LogEvent{}
-
-	// Parse single JSON line
-	record := otelLogRecord{}
-	err := json.Unmarshal(m, &record)
-	if err != nil {
-		w.log.Error("error unmarshalling OTEL log record", "error", err, "received", string(m))
-		return ret
-	}
-
-	// Extract node and service information
-	node := ""
-	service := ""
-
-	// Try to get host name from resource first, then attributes
-	if record.Resource != nil {
-		if hostName, ok := record.Resource["host.name"].(string); ok {
-			node = hostName
-		}
-		if serviceName, ok := record.Resource["service.name"].(string); ok {
-			service = serviceName
-		}
-	}
-
-	// Fallback to attributes if not found in resource
-	if node == "" && record.Attributes != nil {
-		if hostName, ok := record.Attributes["host.name"].(string); ok {
-			node = hostName
-		}
-	}
-	if service == "" && record.Attributes != nil {
-		if serviceName, ok := record.Attributes["service.name"].(string); ok {
-			service = serviceName
-		}
-	}
-
-	// Convert attributes to string map
-	stringAttrs := make(map[string]string)
-	if record.Attributes != nil {
-		for k, v := range record.Attributes {
-			stringAttrs[k] = fmt.Sprintf("%v", v)
-		}
-	}
-	if record.Resource != nil {
-		for k, v := range record.Resource {
-			stringAttrs["resource."+k] = fmt.Sprintf("%v", v)
-		}
-	}
-
-	// Add OTEL-specific fields to attributes
-	if record.TraceID != "" {
-		stringAttrs["trace_id"] = record.TraceID
-	}
-	if record.SpanID != "" {
-		stringAttrs["span_id"] = record.SpanID
-	}
-	if record.Timestamp != "" {
-		stringAttrs["timestamp"] = record.Timestamp
-	}
-	if record.ObservedTimestamp != "" {
-		stringAttrs["observed_timestamp"] = record.ObservedTimestamp
-	}
-
-	e := common.LogEvent{
-		Node:       node,
-		Service:    service,
-		Message:    record.Body,
-		Level:      strings.ToLower(record.SeverityText),
-		Attributes: stringAttrs,
-	}
-
-	if w.trace {
-		v, _ := json.Marshal(e)
-		w.log.Debug("trace", "payload", string(v))
-	}
-
-	ret = append(ret, e)
-	return ret
 }
 
 func (w *OtelFileWatcher) updateStats(events []common.LogEvent) {
