@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/flowcontrol"
 )
 
 var reconnectDuration = time.Duration(250) * time.Millisecond
@@ -44,6 +45,16 @@ func NewKubeWatcher(configPath string, namespace string, log *slog.Logger) (*Kub
 	if err != nil {
 		return nil, err
 	}
+
+	// Disable client-side backoff and rate limiting to ensure immediate retries
+	config.QPS = -1   // Disable rate limiting
+	config.Burst = -1 // Disable burst limiting
+
+	// Set a very short timeout to fail fast and let our reconnect logic handle retries
+	config.Timeout = 1 * time.Second
+
+	// Disable the default backoff manager and use a no-op rate limiter
+	config.RateLimiter = flowcontrol.NewFakeAlwaysRateLimiter()
 
 	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
