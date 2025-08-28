@@ -464,7 +464,6 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 	}
 
 	log.Debug("starting watchers", "endpoints", endpoints, "portchan", portBroadcast != nil)
-	status := statusinator.LabStatus{}
 	ctx, cancel := context.WithCancel(ctx)
 
 	tInfo := make(chan map[string]talos.NodeStatus)
@@ -513,40 +512,46 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 	go func() {
 		for {
 			broadcastStatusUpdate := false
+			var updatedStatus statusinator.LabStatus
 			select {
 			case <-ctx.Done():
 				return
 			case i, ok := <-iInfo:
 				if ok {
-					status.Initializer = i
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Initializer = i
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading initializer status")
 				}
 			case t, ok := <-tInfo:
 				if ok {
-					status.Talos = t
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Talos = t
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading talos states")
 				}
 			case p, ok := <-pInfo:
 				if ok {
-					status.Power = p
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Power = p
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading power status")
 				}
 			case k, ok := <-kubeInfo:
 				if ok {
-					status.Kubernetes = k
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Kubernetes = k
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading kubernetes pod status")
 				}
 			case c, ok := <-cbStatus:
 				if ok {
-					status.Callbacks = c
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Callbacks = c
 					broadcastStatusUpdate = true
 					if cbBroadcast != nil {
 						if len(cbBroadcast) == cap(cbBroadcast) {
@@ -563,7 +568,8 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 				}
 			case p, ok := <-portInfo:
 				if ok {
-					status.Ports = p
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Ports = p
 					broadcastStatusUpdate = true
 					if portBroadcast != nil {
 						if len(portBroadcast) == cap(portBroadcast) {
@@ -579,7 +585,8 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 				}
 			case s, ok := <-stats:
 				if ok {
-					status.Logs = s
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Logs = s
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading log stats")
@@ -596,7 +603,7 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 			}
 
 			if broadcastStatusUpdate {
-				statusReceiveHandler.UpdateStatus(status)
+				statusReceiveHandler.UpdateStatus(updatedStatus)
 			}
 		}
 	}()
