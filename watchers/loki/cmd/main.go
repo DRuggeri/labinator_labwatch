@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 )
 
@@ -23,8 +24,8 @@ func main() {
 		panic(err)
 	}
 
-	events := make(chan loki.LogEvent)
-	stats := make(chan loki.LogStats)
+	events := make(chan common.LogEvent)
+	stats := make(chan common.LogStats)
 	go w.Watch(context.Background(), events, stats)
 
 	for {

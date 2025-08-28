@@ -28,6 +28,7 @@ import (
 	"github.com/DRuggeri/labwatch/statusinator"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/DRuggeri/labwatch/watchers/kubernetes"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/DRuggeri/labwatch/watchers/port"
@@ -150,9 +151,9 @@ func main() {
 	}
 
 	// Set up statusinator with the handlers
-	statusinatorStatusChan := make(chan statusinator.LabStatus, 2)
+	statusinatorStatusChan := make(chan common.LabStatus, 2)
 	statusWatcher.AddClient("statusinator", statusinatorStatusChan)
-	statusinatorEventChan := make(chan loki.LogEvent, 5)
+	statusinatorEventChan := make(chan common.LogEvent, 5)
 	eventReceiveHandler.AddClient("statusinator", statusinatorEventChan)
 	go statinator.Watch(mainCtx, statusinatorStatusChan, statusinatorEventChan)
 
@@ -483,8 +484,8 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 		cancel()
 		return nil, err
 	}
-	events := make(chan loki.LogEvent)
-	stats := make(chan loki.LogStats)
+	events := make(chan common.LogEvent)
+	stats := make(chan common.LogStats)
 	go lWatcher.Watch(ctx, events, stats)
 
 	pInfo := make(chan powerman.PowerStatus)
@@ -512,7 +513,7 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 	go func() {
 		for {
 			broadcastStatusUpdate := false
-			var updatedStatus statusinator.LabStatus
+			var updatedStatus common.LabStatus
 			select {
 			case <-ctx.Done():
 				return

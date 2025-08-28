@@ -7,14 +7,14 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/DRuggeri/labwatch/watchers/loki"
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 type EventReceiveHandler struct {
 	log          *slog.Logger
-	clients      map[string]chan<- loki.LogEvent
+	clients      map[string]chan<- common.LogEvent
 	clientsMutex sync.Mutex
 }
 
@@ -27,7 +27,7 @@ type EventSendHandler struct {
 func NewEventWatcher(ctx context.Context, log *slog.Logger) (*EventReceiveHandler, *EventSendHandler, error) {
 	watcher := &EventReceiveHandler{
 		log:     log.With("component", "eventReceiveHandler"),
-		clients: make(map[string]chan<- loki.LogEvent),
+		clients: make(map[string]chan<- common.LogEvent),
 	}
 
 	sendHandler := &EventSendHandler{
@@ -43,7 +43,7 @@ func NewEventWatcher(ctx context.Context, log *slog.Logger) (*EventReceiveHandle
 	return watcher, sendHandler, nil
 }
 
-func (h *EventReceiveHandler) AddClient(id string, ch chan<- loki.LogEvent) {
+func (h *EventReceiveHandler) AddClient(id string, ch chan<- common.LogEvent) {
 	h.clientsMutex.Lock()
 	h.clients[id] = ch
 	h.clientsMutex.Unlock()
@@ -58,13 +58,13 @@ func (h *EventReceiveHandler) RemoveClient(id string) {
 	h.log.Debug("removed event client", "id", id, "totalClients", clientCount)
 }
 
-func (h *EventReceiveHandler) BroadcastEvent(event loki.LogEvent) {
+func (h *EventReceiveHandler) BroadcastEvent(event common.LogEvent) {
 	h.clientsMutex.Lock()
 	if len(h.clients) > 0 {
 		h.log.Debug("broadcasting event", "clients", len(h.clients))
 
 		// Create a copy of clients to avoid holding lock during broadcast
-		clientsCopy := make(map[string]chan<- loki.LogEvent, len(h.clients))
+		clientsCopy := make(map[string]chan<- common.LogEvent, len(h.clients))
 		for k, v := range h.clients {
 			clientsCopy[k] = v
 		}
@@ -101,7 +101,7 @@ func (h *EventSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	// Create channel for this client
-	thisChan := make(chan loki.LogEvent, 10) // Buffered to prevent blocking
+	thisChan := make(chan common.LogEvent, 10) // Buffered to prevent blocking
 	clientID := uuid.New().String()
 
 	h.watcher.AddClient(clientID, thisChan)

@@ -10,56 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/gorilla/websocket"
 )
 
 var reconnectDuration = time.Duration(250) * time.Millisecond
 var sleepDuration = time.Duration(250) * time.Millisecond
 var QUERY = `{ host_name =~ ".+" } | json`
-
-type LogEvent struct {
-	Node       string
-	Service    string
-	Level      string
-	Message    string
-	Attributes map[string]string
-}
-
-type LogStats struct {
-	NumMessages int
-
-	NumEmergencyMessages int
-	NumAlertMessages     int
-	NumCriticalMessages  int
-	NumErrorMessages     int
-	NumWarnMessages      int
-	NumNoticeMessages    int
-	NumInfoMessages      int
-	NumDebugMessages     int
-
-	NumDHCPDiscover int
-	NumDHCPLeased   int
-
-	NumDNSQueries    int
-	NumDNSLocal      int
-	NumDNSRecursions int
-	NumDNSCached     int
-
-	NumCertChecks  int
-	NumCertOK      int
-	NumCertSigned  int
-	NumCertRenewed int
-
-	NumFirewallWanInDrops  int
-	NumFirewallWanOutDrops int
-	NumFirewallWanDrops    int
-	NumFirewallLanInDrops  int
-	NumFirewallLanOutDrops int
-	NumFirewallLanDrops    int
-
-	NumPhysicalPXEBoots int
-	NumVirtualPXEBoots  int
-}
 
 type LokiWatcherConfig struct {
 	ReconnectDuration time.Duration `yaml:"reconnect-duration"`
@@ -68,9 +25,9 @@ type LokiWatcherConfig struct {
 type LokiWatcher struct {
 	url              url.URL
 	trace            bool
-	internalLogChan  chan LogEvent
-	internalStatChan chan LogStats
-	stats            LogStats
+	internalLogChan  chan common.LogEvent
+	internalStatChan chan common.LogStats
+	stats            common.LogStats
 	log              *slog.Logger
 }
 
@@ -95,13 +52,13 @@ func NewLokiWatcher(ctx context.Context, addr string, query string, trace bool, 
 			RawQuery: q.Encode(),
 		},
 		trace:            trace,
-		internalLogChan:  make(chan LogEvent),
-		internalStatChan: make(chan LogStats),
+		internalLogChan:  make(chan common.LogEvent),
+		internalStatChan: make(chan common.LogStats),
 		log:              log.With("operation", "LokiWatcher"),
 	}, nil
 }
 
-func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- LogEvent, statChan chan<- LogStats) {
+func (w *LokiWatcher) Watch(controlContext context.Context, eventChan chan<- common.LogEvent, statChan chan<- common.LogStats) {
 	go func() {
 		for {
 			select {
@@ -238,8 +195,8 @@ type lokiStream struct {
 	Values [][]string        `json:"values"`
 }
 
-func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
-	ret := []LogEvent{}
+func (w *LokiWatcher) normalizeEvents(m []byte) []common.LogEvent {
+	ret := []common.LogEvent{}
 	msg := lokiMsg{}
 	err := json.Unmarshal(m, &msg)
 	if err != nil {
@@ -248,7 +205,7 @@ func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
 	}
 
 	for _, stream := range msg.Streams {
-		e := LogEvent{
+		e := common.LogEvent{
 			Node:       stream.Stream["host_name"],
 			Service:    stream.Stream["service_name"],
 			Message:    stream.Stream["message"],
@@ -266,7 +223,7 @@ func (w *LokiWatcher) normalizeEvents(m []byte) []LogEvent {
 	return ret
 }
 
-func (w *LokiWatcher) updateStats(events []LogEvent) {
+func (w *LokiWatcher) updateStats(events []common.LogEvent) {
 	for _, e := range events {
 		w.stats.NumMessages++
 

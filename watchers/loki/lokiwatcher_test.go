@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DRuggeri/labwatch/statusinator"
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/DRuggeri/labwatch/watchers/loki"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -120,12 +120,12 @@ func TestFromLogFile(t *testing.T) {
 	w, err := loki.NewLokiWatcher(ctx, "127.0.0.1:8181", "", true, log)
 	require.NoError(t, err)
 
-	events := make(chan loki.LogEvent)
-	stats := make(chan loki.LogStats)
+	events := make(chan common.LogEvent)
+	stats := make(chan common.LogStats)
 
 	go w.Watch(context.Background(), events, stats)
 
-	status := statusinator.LabStatus{}
+	status := common.LabStatus{}
 	errorsEncountered := false
 	eventsEncountered := 0
 	lastUpdate := time.Now()

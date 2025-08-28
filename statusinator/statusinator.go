@@ -11,7 +11,7 @@ import (
 
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
-	"github.com/DRuggeri/labwatch/watchers/loki"
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/jacobsa/go-serial/serial"
 )
 
@@ -27,7 +27,7 @@ type Statusinator struct {
 type BriefStatus struct {
 	Initializer talosinitializer.InitializerStatus `json:"initializer"`
 	Power       powerman.PowerStatus               `json:"power"`
-	Logs        loki.LogStats                      `json:"logs"`
+	Logs        common.LogStats                    `json:"logs"`
 }
 
 func NewStatusinator(port string, l *slog.Logger) (*Statusinator, error) {
@@ -58,7 +58,7 @@ func NewStatusinator(port string, l *slog.Logger) (*Statusinator, error) {
 	return m, nil
 }
 
-func (m *Statusinator) Watch(controlContext context.Context, status <-chan LabStatus, events <-chan loki.LogEvent) {
+func (m *Statusinator) Watch(controlContext context.Context, status <-chan common.LabStatus, events <-chan common.LogEvent) {
 	m.running = true
 	m.log.Info("watching for statuses")
 	for {

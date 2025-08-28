@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DRuggeri/labwatch/statusinator"
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/gorilla/websocket"
 )
 
@@ -167,7 +167,7 @@ func (rt *ReliabilityTest) runTest() (time.Duration, error) {
 			return time.Since(rt.testStartTime), nil
 		}
 
-		var status statusinator.LabStatus
+		var status common.LabStatus
 		err := rt.wsConn.ReadJSON(&status)
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {

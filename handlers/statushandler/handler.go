@@ -7,16 +7,16 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/DRuggeri/labwatch/statusinator"
+	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 type StatusWatcher struct {
 	log           *slog.Logger
-	clients       map[string]chan<- statusinator.LabStatus
+	clients       map[string]chan<- common.LabStatus
 	clientsMutex  sync.Mutex
-	currentStatus statusinator.LabStatus
+	currentStatus common.LabStatus
 	currentMutex  sync.RWMutex
 }
 
@@ -29,7 +29,7 @@ type StatusSendHandler struct {
 func NewStatusWatcher(ctx context.Context, log *slog.Logger) (*StatusWatcher, *StatusSendHandler, error) {
 	watcher := &StatusWatcher{
 		log:     log.With("component", "statusReceiveHandler"),
-		clients: make(map[string]chan<- statusinator.LabStatus),
+		clients: make(map[string]chan<- common.LabStatus),
 	}
 
 	sendHandler := &StatusSendHandler{
@@ -45,7 +45,7 @@ func NewStatusWatcher(ctx context.Context, log *slog.Logger) (*StatusWatcher, *S
 	return watcher, sendHandler, nil
 }
 
-func (h *StatusWatcher) AddClient(id string, ch chan<- statusinator.LabStatus) {
+func (h *StatusWatcher) AddClient(id string, ch chan<- common.LabStatus) {
 	h.clientsMutex.Lock()
 	h.clients[id] = ch
 	h.clientsMutex.Unlock()
@@ -60,7 +60,7 @@ func (h *StatusWatcher) RemoveClient(id string) {
 	h.log.Debug("removed status client", "id", id, "totalClients", clientCount)
 }
 
-func (h *StatusWatcher) UpdateStatus(status statusinator.LabStatus) {
+func (h *StatusWatcher) UpdateStatus(status common.LabStatus) {
 	// Update current status
 	h.currentMutex.Lock()
 	h.currentStatus = status
@@ -71,7 +71,7 @@ func (h *StatusWatcher) UpdateStatus(status statusinator.LabStatus) {
 		h.log.Debug("broadcasting status", "clients", len(h.clients))
 
 		// Create a copy of clients to avoid holding lock during broadcast
-		clientsCopy := make(map[string]chan<- statusinator.LabStatus, len(h.clients))
+		clientsCopy := make(map[string]chan<- common.LabStatus, len(h.clients))
 		for k, v := range h.clients {
 			clientsCopy[k] = v
 		}
@@ -95,7 +95,7 @@ func (h *StatusWatcher) UpdateStatus(status statusinator.LabStatus) {
 	}
 }
 
-func (h *StatusWatcher) GetCurrentStatus() statusinator.LabStatus {
+func (h *StatusWatcher) GetCurrentStatus() common.LabStatus {
 	h.currentMutex.RLock()
 	status := h.currentStatus
 	h.currentMutex.RUnlock()
@@ -121,7 +121,7 @@ func (h *StatusSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	// Create channel for this client
-	thisChan := make(chan statusinator.LabStatus, 5) // Buffered to prevent blocking
+	thisChan := make(chan common.LabStatus, 5) // Buffered to prevent blocking
 	clientID := uuid.New().String()
 
 	h.watcher.AddClient(clientID, thisChan)
