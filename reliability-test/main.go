@@ -21,6 +21,8 @@ type ReliabilityTest struct {
 	testResults        map[string]int
 	config             *Config
 	totalTests         int
+	successCount       int
+	failureCount       int
 	currentStep        string
 	lastStepChangeTime time.Time
 	testStartTime      time.Time
@@ -115,6 +117,7 @@ func (rt *ReliabilityTest) setStepTimer(step string) {
 		default:
 			rt.log.Warn("step timed out", "step", step, "timeout", timeout)
 			rt.testResults[step]++
+			rt.failureCount++
 			rt.markTestComplete()
 		}
 	})
@@ -202,10 +205,13 @@ func (rt *ReliabilityTest) runTest() (time.Duration, error) {
 			rt.currentStep = status.Initializer.CurrentStep
 			rt.lastStepChangeTime = now
 			rt.setStepTimer(rt.currentStep)
-		} // Check for failure
+		}
+
+		// Check for failure
 		if status.Initializer.Failed {
 			rt.log.Warn("test failed", "step", rt.currentStep)
 			rt.testResults[rt.currentStep]++
+			rt.failureCount++
 			rt.markTestComplete()
 			break
 		}
@@ -214,12 +220,21 @@ func (rt *ReliabilityTest) runTest() (time.Duration, error) {
 		if status.Initializer.CurrentStep == "done" {
 			rt.log.Info("test completed successfully")
 			rt.testResults["done"]++
+			rt.successCount++
 			rt.markTestComplete()
 			break
 		}
 	}
 
 	return time.Since(rt.testStartTime), nil
+}
+
+func (rt *ReliabilityTest) printRunningCounts() {
+	if rt.totalTests > 0 {
+		successRate := float64(rt.successCount) / float64(rt.totalTests) * 100
+		fmt.Printf("Running totals: %d tests completed | %d successes | %d failures | %.1f%% success rate\n",
+			rt.totalTests, rt.successCount, rt.failureCount, successRate)
+	}
 }
 
 func (rt *ReliabilityTest) printResults() {
@@ -239,11 +254,13 @@ func (rt *ReliabilityTest) printResults() {
 		fmt.Printf("  %s: %d\n", step, count)
 	}
 
-	// Calculate success rate
-	successCount := rt.testResults["done"]
+	// Calculate success rate using tracked counts
 	if rt.totalTests > 0 {
-		successRate := float64(successCount) / float64(rt.totalTests) * 100
-		fmt.Printf("\nSuccess rate: %.2f%% (%d/%d)\n", successRate, successCount, rt.totalTests)
+		successRate := float64(rt.successCount) / float64(rt.totalTests) * 100
+		fmt.Printf("\nFinal Results:\n")
+		fmt.Printf("  Successes: %d\n", rt.successCount)
+		fmt.Printf("  Failures: %d\n", rt.failureCount)
+		fmt.Printf("  Success rate: %.2f%% (%d/%d)\n", successRate, rt.successCount, rt.totalTests)
 	}
 }
 
@@ -274,6 +291,9 @@ func (rt *ReliabilityTest) Run() {
 		} else {
 			rt.log.Info("test iteration succeeded", "duration", fmt.Sprintf("%.1fs", duration.Seconds()))
 		}
+
+		// Print running counts after each test
+		rt.printRunningCounts()
 
 		if !rt.shutdownRequested {
 			// Wait between tests
