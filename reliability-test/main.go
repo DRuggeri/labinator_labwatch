@@ -156,6 +156,9 @@ func (rt *ReliabilityTest) runTest() (time.Duration, error) {
 		return time.Since(rt.testStartTime), fmt.Errorf("failed to start lab: %w", err)
 	}
 
+	// Sleep 10 seconds to allow labwatch to kill all the nodes and start the new lab
+	time.Sleep(time.Second * 10)
+
 	// Connect to WebSocket
 	if err := rt.connectWebSocket(); err != nil {
 		return time.Since(rt.testStartTime), fmt.Errorf("failed to connect WebSocket: %w", err)

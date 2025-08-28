@@ -276,6 +276,11 @@ func main() {
 
 		resetWatchers()
 
+		// Reset the initialization state and inform clients
+		updatedStatus := statusWatcher.GetCurrentStatus()
+		updatedStatus.Initializer = talosinitializer.InitializerStatus{}
+		statusWatcher.UpdateStatus(updatedStatus)
+
 		initializerCtx, initializerCancel = context.WithCancel(mainCtx)
 		go initializer.Initialize(initializerCtx, lab, labMan, pMan)
 	})
