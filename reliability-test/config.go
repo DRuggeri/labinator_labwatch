@@ -10,6 +10,7 @@ type Config struct {
 	BaseURL      string         `yaml:"baseUrl"`
 	TestInterval int            `yaml:"testInterval"` // seconds between tests
 	Timeouts     map[string]int `yaml:"timeouts"`     // timeouts per step in seconds
+	AbortSteps   []string       `yaml:"abortSteps"`   // steps that cause shutdown on failure/timeout
 }
 
 func LoadConfig(filename string) (*Config, error) {

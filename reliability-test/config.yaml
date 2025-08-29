@@ -10,3 +10,6 @@ timeouts:
   bootstrapping: 155
   finalizing: 255
   starting: 156
+abortSteps:
+  - "booting-nodes"
+  - "finalizing"

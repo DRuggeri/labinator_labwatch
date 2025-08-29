@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,6 +34,7 @@ type ReliabilityTest struct {
 	httpClient         *http.Client
 	wsURL              string
 	shutdownRequested  bool
+	abortSteps         map[string]bool // steps that should cause abort on failure/timeout
 }
 
 func NewReliabilityTest(config *Config, log *slog.Logger) *ReliabilityTest {
@@ -51,6 +53,19 @@ func NewReliabilityTest(config *Config, log *slog.Logger) *ReliabilityTest {
 
 	wsURL := fmt.Sprintf("%s://%s/status", wsScheme, u.Host)
 
+	// Convert abort steps slice to map for fast lookup
+	abortStepsMap := make(map[string]bool)
+	for _, step := range config.AbortSteps {
+		step = strings.TrimSpace(step)
+		if step != "" {
+			abortStepsMap[step] = true
+		}
+	}
+
+	if len(abortStepsMap) > 0 {
+		log.Info("abort configured for steps", "steps", config.AbortSteps)
+	}
+
 	return &ReliabilityTest{
 		testResults:        make(map[string]int),
 		config:             config,
@@ -58,6 +73,7 @@ func NewReliabilityTest(config *Config, log *slog.Logger) *ReliabilityTest {
 		httpClient:         &http.Client{Timeout: 30 * time.Second},
 		wsURL:              wsURL,
 		lastStepChangeTime: time.Now(),
+		abortSteps:         abortStepsMap,
 	}
 }
 
@@ -118,6 +134,13 @@ func (rt *ReliabilityTest) setStepTimer(step string) {
 			rt.log.Warn("step timed out", "step", step, "timeout", timeout)
 			rt.testResults[step]++
 			rt.failureCount++
+
+			// Check if this step should trigger abort
+			if rt.abortSteps[step] {
+				rt.log.Warn("aborting test due to timeout on critical step", "step", step)
+				rt.shutdownRequested = true
+			}
+
 			rt.markTestComplete()
 		}
 	})
@@ -215,6 +238,13 @@ func (rt *ReliabilityTest) runTest() (time.Duration, error) {
 			rt.log.Warn("test failed", "step", rt.currentStep)
 			rt.testResults[rt.currentStep]++
 			rt.failureCount++
+
+			// Check if this step should trigger abort
+			if rt.abortSteps[rt.currentStep] {
+				rt.log.Warn("aborting test due to failure on critical step", "step", rt.currentStep)
+				rt.shutdownRequested = true
+			}
+
 			rt.markTestComplete()
 			break
 		}
@@ -270,7 +300,7 @@ func (rt *ReliabilityTest) printResults() {
 func (rt *ReliabilityTest) Run() {
 	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	go func() {
 		<-sigChan
