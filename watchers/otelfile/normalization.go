@@ -138,7 +138,8 @@ func (w *OtelFileWatcher) normalizeEvents(m []byte) []common.LogEvent {
 	logsData := otlpLogsData{}
 	err := json.Unmarshal(m, &logsData)
 	if err != nil {
-		w.log.Error("error unmarshalling OTLP log record", "error", err, "received", string(m))
+		// Debug because it happens often with partial lines
+		w.log.Debug("error unmarshalling OTLP log record", "error", err, "received", string(m))
 		return ret
 	}
 

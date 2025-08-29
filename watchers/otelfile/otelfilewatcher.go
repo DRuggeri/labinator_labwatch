@@ -8,13 +8,15 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/DRuggeri/labwatch/watchers/common"
 )
 
-var sleepDuration = time.Duration(250) * time.Millisecond
+var sleepDuration = time.Duration(10) * time.Millisecond
 var fileCheckDuration = time.Duration(1) * time.Second
+var statUpdateThrottle = time.Duration(100) * time.Millisecond
 
 type OtelFileWatcherConfig struct {
 	Path string `yaml:"path"`
@@ -128,9 +130,22 @@ func (w *OtelFileWatcher) checkFileRotation() bool {
 		return true
 	}
 
+	// Look at inode first
+	if newStat, ok := info.Sys().(*syscall.Stat_t); ok {
+		if oldStat, ok2 := w.lastFileInfo.Sys().(*syscall.Stat_t); ok2 {
+			if newStat.Ino != oldStat.Ino {
+				w.log.Debug("file rotation detected - different inode",
+					"path", w.path,
+					"oldInode", oldStat.Ino,
+					"newInode", newStat.Ino)
+				return true
+			}
+		}
+	}
+
 	// Check if size decreased (strong indicator of rotation)
 	if info.Size() < w.lastFileInfo.Size() {
-		w.log.Info("file rotation detected - size decreased",
+		w.log.Debug("file rotation detected - size decreased",
 			"path", w.path,
 			"oldSize", w.lastFileInfo.Size(),
 			"newSize", info.Size())
@@ -139,7 +154,7 @@ func (w *OtelFileWatcher) checkFileRotation() bool {
 
 	// Check if modification time is significantly different
 	if info.ModTime().Before(w.lastFileInfo.ModTime()) {
-		w.log.Info("file rotation detected - modification time went backwards",
+		w.log.Debug("file rotation detected - modification time went backwards",
 			"path", w.path,
 			"oldModTime", w.lastFileInfo.ModTime(),
 			"newModTime", info.ModTime())
@@ -163,16 +178,17 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 			}
 
 			// Check if we need to open/reopen the file
-			if w.currentFile == nil || time.Since(lastFileCheck) > fileCheckDuration {
-				if w.currentFile != nil && w.checkFileRotation() {
+			if w.currentFile == nil {
+				if err := w.openFile(true); err != nil {
+					w.log.Error("failed to open file", "error", err)
+					time.Sleep(sleepDuration)
+					continue
+				}
+				lastFileCheck = time.Now()
+			} else if time.Since(lastFileCheck) > fileCheckDuration {
+				if w.checkFileRotation() {
 					w.log.Info("reopening file due to rotation")
 					w.openFile(false)
-				} else if w.currentFile == nil {
-					if err := w.openFile(true); err != nil {
-						w.log.Error("failed to open file", "error", err)
-						time.Sleep(sleepDuration)
-						continue
-					}
 				}
 				lastFileCheck = time.Now()
 			}
@@ -181,6 +197,9 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 			line, err := w.readLine()
 			if err == io.EOF {
 				// Reached EOF - normal for tailing, just sleep and try again
+				if w.trace {
+					w.log.Debug("reached EOF, waiting for new data")
+				}
 				time.Sleep(sleepDuration)
 				continue
 			} else if err != nil {
@@ -212,6 +231,7 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 	}()
 
 	// Event forwarding loop
+	lastStatusUpdate := time.Now()
 	for {
 		select {
 		case <-controlContext.Done():
@@ -224,19 +244,39 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 		}
 
 		// See if there are any messages to read from the internal channels
+		// and drain them all if so
 	OUTER:
 		for {
 			select {
 			case event := <-w.internalLogChan:
-				eventChan <- event
+				select {
+				case eventChan <- event:
+					if w.trace {
+						w.log.Debug("forwarded event to main channel")
+					}
+				default:
+					w.log.Warn("event channel full, dropping event")
+				}
 			case stats := <-w.internalStatChan:
-				statChan <- stats
+				if time.Since(lastStatusUpdate) < statUpdateThrottle {
+					// Throttle stats updates
+					break OUTER
+				}
+				lastStatusUpdate = time.Now()
+				select {
+				case statChan <- stats:
+					if w.trace {
+						w.log.Debug("forwarded stats to main channel")
+					}
+				default:
+					w.log.Warn("stats channel full, dropping stats")
+				}
 			default:
 				break OUTER
 			}
-		}
 
-		time.Sleep(sleepDuration)
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 }
 

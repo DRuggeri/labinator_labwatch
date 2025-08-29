@@ -492,8 +492,8 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 		cancel()
 		return nil, err
 	}
-	events := make(chan common.LogEvent)
-	stats := make(chan common.LogStats)
+	events := make(chan common.LogEvent, 100) // Enough to hold a burst of events from otelcol
+	stats := make(chan common.LogStats, 5)
 	go lWatcher.Watch(ctx, events, stats)
 
 	pInfo := make(chan powerman.PowerStatus)
@@ -513,9 +513,7 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 		return nil, err
 	}
 	kubeInfo := make(chan map[string]kubernetes.PodStatus)
-	if lab != "" {
-		go kubeWatcher.Watch(ctx, kubeInfo)
-	}
+	go kubeWatcher.Watch(ctx, kubeInfo)
 
 	log = log.With("operation", "watchloop")
 	go func() {
