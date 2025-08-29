@@ -161,6 +161,12 @@ func main() {
 	eventReceiveHandler.AddClient("statusinator", statusinatorEventChan)
 	go statinator.Watch(mainCtx, statusinatorStatusChan, statusinatorEventChan)
 
+	loadWatcher, loadStatSendHandler, err := loadstathandler.NewStatHandlers(mainCtx, log)
+	if err != nil {
+		log.Error("failed to create load stat handlers", "error", err.Error())
+		os.Exit(1)
+	}
+
 	wMan := wm.NewWindowsManager(mainCtx, log)
 	if err != nil {
 		log.Error("failed to create the windows manager", "error", err.Error())
@@ -183,6 +189,7 @@ func main() {
 		watcherCancel()
 		cbWatcher.Reset()
 		statusWatcher.ResetStatus()
+		loadWatcher.Reset()
 		watcherCancel, err = startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, initializer, statusWatcher, eventReceiveHandler, log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
@@ -365,8 +372,7 @@ func main() {
 		wMan.StartWindow(mainCtx, cmd, wm.WMScreenBottom)
 	})
 
-	loadStatReceiveHandler, loadStatSendHandler, err := loadstathandler.NewStatHandlers(mainCtx, log)
-	http.Handle("/loadstats", loadStatReceiveHandler)
+	http.Handle("/loadstats", loadWatcher)
 	http.Handle("/loadinfo", loadStatSendHandler)
 
 	http.HandleFunc("/scenarios", func(w http.ResponseWriter, r *http.Request) {

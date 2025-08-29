@@ -136,6 +136,34 @@ func (h *LoadStatReceiveHandler) removeStatClient(id string) {
 	h.mux.Unlock()
 }
 
+func (h *LoadStatReceiveHandler) Reset() {
+	h.mux.Lock()
+	defer h.mux.Unlock()
+
+	// Reset all totals and rates
+	h.stats.TotalServerOk = 0
+	h.stats.TotalServerNok = 0
+	h.stats.TotalClientOk = 0
+	h.stats.TotalClientNok = 0
+	h.stats.ServerOkRate = 0
+	h.stats.ServerNokRate = 0
+	h.stats.ClientOkRate = 0
+	h.stats.ClientNokRate = 0
+
+	// Reset all server stats
+	for podName := range h.stats.Servers {
+		h.stats.Servers[podName] = OKNOK{OK: 0, NOK: 0}
+	}
+
+	// Reset all client stats
+	for podName := range h.stats.Clients {
+		h.stats.Clients[podName] = OKNOK{OK: 0, NOK: 0}
+	}
+
+	// Broadcast the reset stats
+	h.statChan <- *h.stats
+}
+
 func (h *LoadStatReceiveHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := u.Upgrade(w, r, nil)
 	if err != nil {
