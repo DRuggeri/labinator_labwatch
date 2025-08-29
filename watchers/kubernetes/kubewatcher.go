@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"log/slog"
+	"os"
 	"time"
 
 	"k8s.io/client-go/informers"  // Used to create shared informers
@@ -19,14 +20,15 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 )
 
-var reconnectDuration = time.Duration(250) * time.Millisecond
+var reconnectDuration = time.Duration(5) * time.Second
 var resyncDuration = time.Duration(30) * time.Second
 
 type KubeWatcher struct {
-	configPath string
-	clientSet  *kubernetes.Clientset
-	namespace  string
-	log        *slog.Logger
+	configPath     string
+	clientSet      *kubernetes.Clientset
+	namespace      string
+	log            *slog.Logger
+	lastConfigTime time.Time
 }
 
 type PodStatus struct {
@@ -41,32 +43,22 @@ func NewKubeWatcher(configPath string, namespace string, log *slog.Logger) (*Kub
 		configPath = homedir.HomeDir() + "/.kube/config"
 	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Disable client-side backoff and rate limiting to ensure immediate retries
-	config.QPS = -1   // Disable rate limiting
-	config.Burst = -1 // Disable burst limiting
-
-	// Set a very short timeout to fail fast and let our reconnect logic handle retries
-	config.Timeout = 1 * time.Second
-
-	// Disable the default backoff manager and use a no-op rate limiter
-	config.RateLimiter = flowcontrol.NewFakeAlwaysRateLimiter()
-
-	clientSet, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return &KubeWatcher{
+	w := &KubeWatcher{
 		configPath: configPath,
-		clientSet:  clientSet,
 		namespace:  namespace,
-		log:        log,
-	}, nil
+		log:        log.With("operation", "kubewatcher"),
+	}
+
+	// Initial client setup
+	clientSet, modTime, err := w.buildClientSet()
+	if err != nil {
+		return nil, err
+	}
+
+	w.clientSet = clientSet
+	w.lastConfigTime = modTime
+
+	return w, nil
 }
 
 func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[string]PodStatus) {
@@ -81,12 +73,26 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 				// Not ready to read from control channel - carry on
 			}
 
+			// Check if config file has changed and reload if necessary
+			if fileInfo, err := os.Stat(w.configPath); err == nil {
+				if fileInfo.ModTime().After(w.lastConfigTime) {
+					w.log.Debug("kubernetes config file changed, reloading client")
+					if newClientSet, newModTime, err := w.buildClientSet(); err == nil {
+						w.clientSet = newClientSet
+						w.lastConfigTime = newModTime
+					} else {
+						w.log.Error("failed to reload kubernetes client", "error", err)
+					}
+				}
+			}
+
 			v, err := w.clientSet.Discovery().ServerVersion()
 			if err != nil {
-				// The client starts attempting to connect at the start of the lab, but it'll be a while before
-				// we can actually connect. Keep the logs quiet until we connect at least once
+				// The client will attempt connecting often - suppress errors
+				// until it actually connects once
 				if connected {
 					w.log.Error("error connecting to kubernetes", "error", err)
+					connected = false
 				}
 				time.Sleep(reconnectDuration)
 				continue
@@ -149,7 +155,7 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 
 			go factory.Start(controlContext.Done())
 			factory.WaitForCacheSync(controlContext.Done())
-			w.log.Info("cache for cluster synchronized")
+			w.log.Debug("cache for cluster synchronized")
 
 			// This line keeps the goroutine running indefinitely.
 			// It will block until the 'stopCh' channel is closed, allowing the informer to run in the background.
@@ -166,4 +172,36 @@ func podToStatus(pod *corev1.Pod) PodStatus {
 		Status:    string(pod.Status.Phase),
 		Node:      pod.Spec.NodeName,
 	}
+}
+
+// buildClientSet creates a new Kubernetes clientset from the config file
+func (w *KubeWatcher) buildClientSet() (*kubernetes.Clientset, time.Time, error) {
+	// Get the modification time of the config file
+	fileInfo, err := os.Stat(w.configPath)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	modTime := fileInfo.ModTime()
+
+	config, err := clientcmd.BuildConfigFromFlags("", w.configPath)
+	if err != nil {
+		return nil, modTime, err
+	}
+
+	// Disable client-side backoff and rate limiting to ensure immediate retries
+	config.QPS = -1   // Disable rate limiting
+	config.Burst = -1 // Disable burst limiting
+
+	// Set a very short timeout to fail fast and let our reconnect logic handle retries
+	config.Timeout = 1 * time.Second
+
+	// Disable the default backoff manager and use a no-op rate limiter
+	config.RateLimiter = flowcontrol.NewFakeAlwaysRateLimiter()
+
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, modTime, err
+	}
+
+	return clientSet, modTime, nil
 }
