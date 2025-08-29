@@ -63,6 +63,7 @@ type LabwatchConfig struct {
 	NetbootLink         string `yaml:"netboot-link"`
 	PortWatchTrace      bool   `yaml:"port-watch-trace"`
 	PodWatchNamespace   string `yaml:"pod-watch-namespace"`
+	DocDir              string `yaml:"doc-dir"`
 }
 
 func main() {
@@ -102,6 +103,7 @@ func main() {
 		TalosScenariosDir:   "/home/boss/talos/scenarios",
 		PortWatchTrace:      false,
 		PodWatchNamespace:   "",
+		DocDir:              "/var/www/html",
 	}
 
 	if *config != "" {
@@ -410,6 +412,10 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write(b)
 	})
+
+	// Serve static HTML files from the configured directory
+	htmlFileServer := http.FileServer(http.Dir(cfg.DocDir))
+	http.Handle("/html/", http.StripPrefix("/html/", htmlFileServer))
 
 	fsys, err := fs.Sub(siteFS, "site")
 	if err != nil {
