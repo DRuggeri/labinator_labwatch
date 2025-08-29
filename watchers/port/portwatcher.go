@@ -96,7 +96,12 @@ func (w *PortWatcher) Watch(controlContext context.Context, resultChan chan<- Po
 		case s := <-w.internalStatusChan:
 			w.mux.Lock()
 			w.endpoints[s.endpoint] = s.status
-			resultChan <- w.endpoints
+			// Create a deep copy to avoid concurrent map access
+			endpointsCopy := make(map[string]bool, len(w.endpoints))
+			for key, value := range w.endpoints {
+				endpointsCopy[key] = value
+			}
+			resultChan <- endpointsCopy
 			w.mux.Unlock()
 		default:
 			// Not ready to read from control channel or watcher - carry on

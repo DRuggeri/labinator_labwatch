@@ -112,7 +112,12 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 					p := podToStatus(pod)
 					w.log.Debug("pod added", "name", p.PodName, "node", p.Node, "status", p.Status)
 					status[p.PodName] = p
-					podChan <- status
+					// Create a deep copy to avoid concurrent map access
+					statusCopy := make(map[string]PodStatus, len(status))
+					for key, value := range status {
+						statusCopy[key] = value
+					}
+					podChan <- statusCopy
 				},
 				UpdateFunc: func(oldObj, newObj interface{}) {
 					pod := newObj.(*corev1.Pod)
@@ -120,7 +125,12 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 					if o, ok := status[p.PodName]; !ok || o.Status != p.Status || o.Node != p.Node {
 						w.log.Debug("pod updated", "name", p.PodName, "node", p.Node, "status", p.Status)
 						status[p.PodName] = p
-						podChan <- status
+						// Create a deep copy to avoid concurrent map access
+						statusCopy := make(map[string]PodStatus, len(status))
+						for key, value := range status {
+							statusCopy[key] = value
+						}
+						podChan <- statusCopy
 					}
 				},
 				DeleteFunc: func(obj interface{}) {
@@ -128,7 +138,12 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 					p := podToStatus(pod)
 					w.log.Debug("pod deleted", "name", p.PodName, "node", p.Node, "status", p.Status)
 					delete(status, p.PodName)
-					podChan <- status
+					// Create a deep copy to avoid concurrent map access
+					statusCopy := make(map[string]PodStatus, len(status))
+					for key, value := range status {
+						statusCopy[key] = value
+					}
+					podChan <- statusCopy
 				},
 			})
 

@@ -534,7 +534,12 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 			case t, ok := <-tInfo:
 				if ok {
 					updatedStatus = statusReceiveHandler.GetCurrentStatus()
-					updatedStatus.Talos = t
+					// Create a deep copy of the Talos map to avoid concurrent access
+					talosCopy := make(map[string]talos.NodeStatus, len(t))
+					for key, value := range t {
+						talosCopy[key] = value
+					}
+					updatedStatus.Talos = talosCopy
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading talos states")

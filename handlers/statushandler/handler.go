@@ -7,7 +7,11 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/common"
+	"github.com/DRuggeri/labwatch/watchers/kubernetes"
+	"github.com/DRuggeri/labwatch/watchers/port"
+	"github.com/DRuggeri/labwatch/watchers/talos"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -102,11 +106,61 @@ func (h *StatusWatcher) GetCurrentStatus() common.LabStatus {
 	return status
 }
 
+// safeCopyForMarshaling creates a deep copy of LabStatus for safe JSON marshaling
+// This prevents concurrent map access during JSON serialization
+func (h *StatusWatcher) safeCopyForMarshaling(status common.LabStatus) common.LabStatus {
+	safeCopy := status // Copy all scalar fields
+
+	// Deep copy Kubernetes map
+	if status.Kubernetes != nil {
+		safeCopy.Kubernetes = make(map[string]kubernetes.PodStatus, len(status.Kubernetes))
+		for k, v := range status.Kubernetes {
+			safeCopy.Kubernetes[k] = v
+		}
+	}
+
+	// Deep copy Talos map
+	if status.Talos != nil {
+		safeCopy.Talos = make(map[string]talos.NodeStatus, len(status.Talos))
+		for k, v := range status.Talos {
+			safeCopy.Talos[k] = v
+		}
+	}
+
+	// Deep copy Ports map
+	if status.Ports != nil {
+		safeCopy.Ports = make(port.PortStatus, len(status.Ports))
+		for k, v := range status.Ports {
+			safeCopy.Ports[k] = v
+		}
+	}
+
+	// Deep copy Callbacks structure
+	if status.Callbacks.KVPairs != nil || status.Callbacks.ClientCount != nil {
+		safeCopy.Callbacks = callbacks.CallbackStatus{
+			KVPairs:     make(map[string]map[string]string),
+			ClientCount: make(map[string]int),
+		}
+		for k, v := range status.Callbacks.KVPairs {
+			safeCopy.Callbacks.KVPairs[k] = make(map[string]string)
+			for k2, v2 := range v {
+				safeCopy.Callbacks.KVPairs[k][k2] = v2
+			}
+		}
+		for k, v := range status.Callbacks.ClientCount {
+			safeCopy.Callbacks.ClientCount[k] = v
+		}
+	}
+
+	return safeCopy
+}
+
 func (h *StatusSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Handle non-WebSocket requests (return current status as JSON)
 	if r.Header.Get("Upgrade") == "" {
 		status := h.watcher.GetCurrentStatus()
-		b, _ := json.Marshal(status)
+		safeCopy := h.watcher.safeCopyForMarshaling(status)
+		b, _ := json.Marshal(safeCopy)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(b)
 		return
@@ -129,7 +183,8 @@ func (h *StatusSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Send current status immediately
 	currentStatus := h.watcher.GetCurrentStatus()
-	data, _ := json.Marshal(currentStatus)
+	safeCopy := h.watcher.safeCopyForMarshaling(currentStatus)
+	data, _ := json.Marshal(safeCopy)
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		h.log.Info("failed to send initial status", "error", err.Error())
 		return
@@ -141,7 +196,8 @@ func (h *StatusSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case status := <-thisChan:
-			data, _ := json.Marshal(status)
+			safeCopy := h.watcher.safeCopyForMarshaling(status)
+			data, _ := json.Marshal(safeCopy)
 			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 				h.log.Debug("client disconnected", "error", err.Error())
 				return
