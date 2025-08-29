@@ -24,6 +24,7 @@
             right: 0px;
             padding: 15px;
             height: 128px;
+            animation: fade 3s infinite alternate;
         }
         div.labnode {
             border: 1px solid #686868;
@@ -54,12 +55,16 @@
         }
         span.ok {
             background-color: green;
+            margin-left: 15px;
+            border-radius: 30%;
         }
         span.nok {
             background-color: rgb(40, 63, 68);
+            border-radius: 30%;
         }
         span.hits {
             background-color: #888888;
+            border-radius: 30%;
         }
         .connection-indicator {
             display: inline-block;
@@ -71,6 +76,7 @@
         }
         .connection-indicator.connected {
             background-color: green;
+            animation: fade .25s infinite alternate;
         }
         .connection-indicator.disconnected {
             background-color: red;
@@ -85,6 +91,7 @@
             display: flex;
             flex-direction: row;
             align-items: flex-start;
+            margin-top: 10px;
         }
         .cluster-nodes {
             flex: 1;
@@ -120,6 +127,23 @@
             color: #888888;
             text-decoration: line-through;
         }
+        th {
+            color: #bebebe;
+            text-align: left;
+            font-weight: normal;
+            font-size: .8em;
+        }
+        @keyframes fade {
+            0% {
+                opacity: 0.6;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0.6;
+            }
+        }
     </style>
     <!-- https://unpkg.com/chart.js@2.8.0/dist/Chart.bundle.js -->
     <script src="/js/Chart.bundle.js"></script>
@@ -128,23 +152,73 @@
 </head>
 <body>
     <div style="display: flex; align-items: center; margin-bottom: 20px;">
-        <h1 style="margin-right: 30px;">Load Status</h1>
+        <h1 id="title" style="margin-right: 30px;">Status</h1>
         <div class="connection-status">
             <span class="connection-indicator disconnected" id="loadConnectionIndicator"></span>Load Info
         </div>
         <div class="connection-status">
             <span class="connection-indicator disconnected" id="statusConnectionIndicator"></span>Status
         </div>
-        <div class="container-status">
-            <span class="container-count" id="clientContainerCount">?</span> Clients
-        </div>
-        <div class="container-status">
-            <span class="container-count" id="serverContainerCount">?</span> Servers
+        <div id="container-status" style="display: none;">
+            <div class="container-status">
+                <span class="container-count" id="clientContainerCount">?</span> Clients
+            </div>
+            <div class="container-status">
+                <span class="container-count" id="serverContainerCount">?</span> Servers
+            </div>
         </div>
     </div>
     <img class="logo" src="/assets/logo-white.svg" />
 
-    <div id="overview" style="display:flex; flex-direction: row; align-items: center;">
+    <div id="lab" style="display: none;">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>CurrentStep</th>
+                <th>Booting Physical</th>
+                <th>Booting Virtual</th>
+                <th>Hypervisors</th>
+                <th>Nodes</th>
+                <th>Pods</th>
+            </tr>
+            <tr>
+                <td><span id="LabName"></span></td>
+                <td><span id="CurrentStep">N/A</span></td>
+                <td><span id="NumPhysicalPXEBoots">0</span></td>
+                <td><span id="NumVirtualPXEBoots">0</span></td>
+                <td><span id="InitializedHypervisors">0</span> / <span id="NumHypervisors">0</span></td>
+                <td><span id="InitializedNodes">0</span> / <span id="NumNodes">0</span></td>
+                <td><span id="InitializedPods">0</span> / <span id="NumPods">0</span></td>
+            </tr>
+        </table>
+
+        <table style="margin-top: 10px;">
+            <tr>
+                <th>Total</th>
+                <th>Emergency</th>
+                <th>Alert</th>
+                <th>Critical</th>
+                <th>Error</th>
+                <th>Warn</th>
+                <th>Notice</th>
+                <th>Info</th>
+                <th>Debug</th>
+            </tr>
+            <tr>
+                <td><span id="NumMessages">0</span></td>
+                <td><span id="NumEmergencyMessages">0</span></td>
+                <td><span id="NumAlertMessages">0</span></td>
+                <td><span id="NumCriticalMessages">0</span></td>
+                <td><span id="NumErrorMessages">0</span></td>
+                <td><span id="NumWarnMessages">0</span></td>
+                <td><span id="NumNoticeMessages">0</span></td>
+                <td><span id="NumInfoMessages">0</span></td>
+                <td><span id="NumDebugMessages">0</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="load" style="display:none; flex-direction: row; align-items: center;">
         <div id="summary">
             <table>
                 <tr>
@@ -204,7 +278,7 @@
             </div>
         </div>
 
-        <div class="filter-panel">
+        <div id="filter" class="filter-panel" style="display: none;">
             <h4>Pod Filters</h4>
             <a class="filter-link active" id="systemFilter" onclick="toggleFilter('system')">System</a>
             <a class="filter-link active" id="monitoringFilter" onclick="toggleFilter('monitoring')">Monitoring</a>
@@ -216,6 +290,7 @@
 
     <script>
         // Hold some globals for continued updates
+        var lastStatus = {}
         var statusContainers = {}
         var labNodes = {}
         var lastNodeState = {}
@@ -292,7 +367,13 @@
         }
 
         function updateNodeContainerCounts(containers) {
-            if (containers == null ) return
+            if (containers == null ) {
+                for (const [nodeName, v] of Object.entries(labNodes)) {
+                    labNodes[nodeName].ok.innerHTML = 0
+                    labNodes[nodeName].nok.innerHTML = 0
+                }
+                return
+            }
 
             statusContainers = containers
             var clientCount = 0
@@ -376,7 +457,7 @@
                     }]
                 },
                 options: {
-                    responsive: true,
+                    responsive: false,
                     title: {
                         display: true,
                         text: label
@@ -514,10 +595,6 @@
                     */
 
                     if (hasContainers) {
-                        newSpan = document.createElement('span')
-                        newSpan.innerHTML = " - "
-                        newDiv.appendChild(newSpan)
-
                         okSpan = document.createElement('span')
                         okSpan.setAttribute('id', node['name'] + "-ok")
                         okSpan.className = 'number ok'
@@ -565,17 +642,54 @@
 
             statusSocket.onmessage = (event) => {
                 try {
-                    const data = JSON.parse(event.data)
+                    const status = JSON.parse(event.data)
 
-                    for (const [k, v] of Object.entries(data)) {
+                    for (const [k, v] of Object.entries(status['initializer'])) {
                         const el = document.getElementById(k)
                         if ( el != null ) {
                             el.innerHTML = v
                         }
                     }
 
-                    updateNodeStatus(data['ports'])
-                    updateNodeContainerCounts(data['kubernetes'])
+                    for (const [k, v] of Object.entries(status['logs'])) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            el.innerHTML = v
+                        }
+                    }
+
+                    for (const [k, v] of Object.entries(status)) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            el.innerHTML = v
+                        }
+                    }
+
+                    if (lastStatus['initializer'] == null || lastStatus['initializer']['CurrentStep'] != status['initializer']['CurrentStep']) {
+                        // Figure out what should be shown
+                        switch(status['initializer']['CurrentStep']) {
+                            case '':
+                            case 'starting':
+                            case 'done':
+                                document.getElementById('title').innerHTML = 'Load Status'
+                                document.getElementById('lab').style.display = 'none'
+                                document.getElementById('load').style.display = 'flex'
+                                document.getElementById('filter').style.display = 'block'
+                                document.getElementById('container-status').style.display = 'block'
+                                break;
+                            default:
+                                document.getElementById('title').innerHTML = 'Lab Status'
+                                document.getElementById('lab').style.display = 'block'
+                                document.getElementById('load').style.display = 'none'
+                                document.getElementById('filter').style.display = 'none'
+                                document.getElementById('container-status').style.display = 'none'
+                                break;
+                        }
+                    }
+
+                    lastStatus = status
+                    updateNodeStatus(status['ports'])
+                    updateNodeContainerCounts(status['kubernetes'])
                 } catch (error) {
                     console.log("Failed parsing JSON from status server:", error)
                 }
