@@ -30,6 +30,9 @@
             margin: 10px;
             padding: 10px;
         }
+        div.node {
+            filter: brightness(50%);
+        }
         div.virtual {
             background-color: #444444;
             margin: 5px;
@@ -139,7 +142,7 @@
             <span class="container-count" id="serverContainerCount">?</span> Servers
         </div>
     </div>
-    <img class="logo" src="assets/logo-white.svg" />
+    <img class="logo" src="/assets/logo-white.svg" />
 
     <div id="overview" style="display:flex; flex-direction: row; align-items: center;">
         <div id="summary">
@@ -215,6 +218,7 @@
         // Hold some globals for continued updates
         var statusContainers = {}
         var labNodes = {}
+        var lastNodeState = {}
         
         // Filter globals
         var filters = {
@@ -271,9 +275,25 @@
             }
         }
 
+        function updateNodeStatus(ports) {
+            if (ports == null ) return
+
+            for (const [combo, up] of Object.entries(ports)) {
+                if (lastNodeState[combo] != up) {
+                    const [ip, port] = combo.split(':')
+                    console.log('node %s changed state %s', ip, up)
+                    el = ip2NodeElement[ip]
+                    if (el != null) {
+                        el.style.filter = up ? 'brightness(100%)' : 'brightness(50%)'
+                    }
+                }
+            }
+            lastNodeState = ports
+        }
+
         function updateNodeContainerCounts(containers) {
             if (containers == null ) return
-            
+
             statusContainers = containers
             var clientCount = 0
             var serverCount = 0
@@ -416,7 +436,7 @@
                     updateGauges(data['ServerOkRate'], data['ServerNokRate'])
                     updateNodeHitCounts(data['Servers'])
                 } catch (error) {
-                    console.log("Failed parsing JSON from status server:", error)
+                    console.log("Failed parsing JSON from loadinfo server:", error)
                 }
             };
 
@@ -444,6 +464,7 @@
             console.log("config: %o", cfg)
 
             ip2HypervisorName = {}
+            ip2NodeElement = {}
 
             const hostTypes = [ 'physical', 'hypervisor', 'virtual' ]
             hostTypes.forEach(type => {
@@ -477,7 +498,8 @@
 
                     newDiv = document.createElement('div')
                     newDiv.setAttribute('id', node['name'])
-                    newDiv.className = type
+                    newDiv.classList.add(type, 'node')
+                    ip2NodeElement[node['ip']] = newDiv
 
                     newSpan = document.createElement('span')
                     newSpan.className = 'nodename'
@@ -552,6 +574,7 @@
                         }
                     }
 
+                    updateNodeStatus(data['ports'])
                     updateNodeContainerCounts(data['kubernetes'])
                 } catch (error) {
                     console.log("Failed parsing JSON from status server:", error)
