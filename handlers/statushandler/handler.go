@@ -99,6 +99,10 @@ func (h *StatusWatcher) UpdateStatus(status common.LabStatus) {
 	}
 }
 
+func (h *StatusWatcher) ResetStatus() {
+	h.UpdateStatus(common.LabStatus{})
+}
+
 func (h *StatusWatcher) GetCurrentStatus() common.LabStatus {
 	h.currentMutex.RLock()
 	status := h.currentStatus

@@ -182,6 +182,7 @@ func main() {
 		log.Info("resetting watchers")
 		watcherCancel()
 		cbWatcher.Reset()
+		statusWatcher.ResetStatus()
 		watcherCancel, err = startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, initializer, statusWatcher, eventReceiveHandler, log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
