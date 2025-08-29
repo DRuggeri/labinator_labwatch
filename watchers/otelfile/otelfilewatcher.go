@@ -187,7 +187,7 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 				lastFileCheck = time.Now()
 			} else if time.Since(lastFileCheck) > fileCheckDuration {
 				if w.checkFileRotation() {
-					w.log.Info("reopening file due to rotation")
+					w.log.Debug("reopening file due to rotation")
 					w.openFile(false)
 				}
 				lastFileCheck = time.Now()
