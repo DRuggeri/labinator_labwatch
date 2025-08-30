@@ -22,6 +22,7 @@ import (
 	"github.com/DRuggeri/labwatch/handlers/browserhandler"
 	"github.com/DRuggeri/labwatch/handlers/eventhandler"
 	"github.com/DRuggeri/labwatch/handlers/loadstathandler"
+	"github.com/DRuggeri/labwatch/handlers/reliabilitytesthandler"
 	"github.com/DRuggeri/labwatch/handlers/statushandler"
 	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
@@ -50,20 +51,21 @@ var (
 )
 
 type LabwatchConfig struct {
-	LokiAddress         string `yaml:"loki-address"`
-	LokiQuery           string `yaml:"loki-query"`
-	LogPath             string `yaml:"log-path"`
-	LogTrace            bool   `yaml:"log-trace"`
-	TalosConfigFile     string `yaml:"talos-config"`
-	TalosScenarioConfig string `yaml:"talos-scenario-config"`
-	TalosScenariosDir   string `yaml:"talos-scenarios-directory"`
-	PowerManagerPort    string `yaml:"powermanager-port"`
-	StatusinatorPort    string `yaml:"statusinator-port"`
-	NetbootFolder       string `yaml:"netboot-folder"`
-	NetbootLink         string `yaml:"netboot-link"`
-	PortWatchTrace      bool   `yaml:"port-watch-trace"`
-	PodWatchNamespace   string `yaml:"pod-watch-namespace"`
-	DocDir              string `yaml:"doc-dir"`
+	LokiAddress         string                         `yaml:"loki-address"`
+	LokiQuery           string                         `yaml:"loki-query"`
+	LogPath             string                         `yaml:"log-path"`
+	LogTrace            bool                           `yaml:"log-trace"`
+	TalosConfigFile     string                         `yaml:"talos-config"`
+	TalosScenarioConfig string                         `yaml:"talos-scenario-config"`
+	TalosScenariosDir   string                         `yaml:"talos-scenarios-directory"`
+	PowerManagerPort    string                         `yaml:"powermanager-port"`
+	StatusinatorPort    string                         `yaml:"statusinator-port"`
+	NetbootFolder       string                         `yaml:"netboot-folder"`
+	NetbootLink         string                         `yaml:"netboot-link"`
+	PortWatchTrace      bool                           `yaml:"port-watch-trace"`
+	PodWatchNamespace   string                         `yaml:"pod-watch-namespace"`
+	DocDir              string                         `yaml:"doc-dir"`
+	ReliabilityTest     *reliabilitytesthandler.Config `yaml:"reliability-test"`
 }
 
 func main() {
@@ -104,6 +106,21 @@ func main() {
 		PortWatchTrace:      false,
 		PodWatchNamespace:   "",
 		DocDir:              "/var/www/html",
+		ReliabilityTest: &reliabilitytesthandler.Config{
+			BaseURL:      "http://boss.local:8080",
+			TestInterval: 5,
+			Timeouts: map[string]int{
+				"init":                30,
+				"secret gen":          150,
+				"disk wipe":           235,
+				"powerup":             60,
+				"booting-hypervisors": 245,
+				"booting-nodes":       235,
+				"bootstrapping":       155,
+				"finalizing":          255,
+				"starting":            156,
+			},
+		},
 	}
 
 	if *config != "" {
@@ -183,6 +200,19 @@ func main() {
 
 	http.Handle("/power", pMan)
 	http.Handle("/callbacks", cbWatcher)
+
+	reliabilityHandler, err := reliabilitytesthandler.NewReliabilityTestHandler(cfg.ReliabilityTest, log)
+	if err != nil {
+		log.Error("failed to create reliability test handler", "error", err)
+		os.Exit(1)
+	}
+
+	// Set up reliability test handler with status updates
+	reliabilityStatusChan := make(chan common.LabStatus, 2)
+	statusWatcher.AddClient("reliabilitytest", reliabilityStatusChan)
+	go reliabilityHandler.Watch(mainCtx, reliabilityStatusChan)
+
+	http.Handle("/reliabilitytest", reliabilityHandler)
 
 	resetWatchers := func() {
 		log.Info("resetting watchers")

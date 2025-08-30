@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reliability Test</title>
+    <style>
+        body {
+            font-family: Source Sans Pro, Helvetica, sans-serif;
+            background-color: #191919;
+            color: #ffffff;
+        }
+        h1 h2 h3 h4 h5 {
+            color: #ffffff;
+        }
+        td, th {
+            border: 1px solid #686868;
+            padding: 1px 5px 1px 5px;
+        }
+        table {
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        img.logo {
+            position: fixed;
+            top: 0px;
+            right: 0px;
+            padding: 15px;
+            height: 85px;
+        }
+        .connection-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .connection-indicator.connected {
+            background-color: green;
+        }
+        .connection-indicator.disconnected {
+            background-color: red;
+        }
+        .start-stop-button {
+            font-size: .5em;
+            display: inline-block;
+            padding: 5px;
+            margin-left: 15px;
+            background-color: #4a4a4a;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 4px;
+            border: 1px solid #686868;
+            cursor: pointer;
+        }
+        .start-stop-button:hover {
+            background-color: #5a5a5a;
+        }
+        .start-stop-button.running:hover {
+            background-color: #e74c3c;
+        }
+        .start-stop-button.stopped:hover {
+            background-color: #2e6da4;
+        }
+        .status-running {
+            color: #27ae60;
+        }
+        .status-stopped {
+            color: #e74c3c;
+        }
+        .status-error {
+            color: #f39c12;
+        }
+        th {
+            color: #bebebe;
+            text-align: left;
+            font-weight: normal;
+            font-size: .8em;
+        }
+        .live-duration {
+            font-weight: bold;
+        }
+        .timeout {
+            font-size: .5em;
+        }
+        .timeout-normal {
+            color: #ffffff;
+        }
+        .timeout-exceeded {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .failure-name {
+            color: #f39c12;
+            margin-right: 8px;
+        }
+        .failure-number {
+            color: #e74c3c;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>
+        Reliability Test 
+        <a href="#" id="startStopButton" class="start-stop-button stopped" onclick="toggleTest()">Start Test</a>
+    </h1>
+    <img class="logo" src="/assets/logo-white.svg" />
+
+    <div id="testStatus">
+        <h3>Test Status</h3>
+        <table>
+            <tr>
+                <th>Events</th>
+                <th>Status</th>
+                <th>Current Step</th>
+                <th>Total Iterations</th>
+                <th>Successful Iterations</th>
+                <th>Failed Iterations</th>
+                <th>Success Rate</th>
+                <th>Last Error</th>
+            </tr>
+            <tr>
+                <td><span class="connection-indicator disconnected" id="connectionIndicator"></span>Status Events: <span id="receivedEvents">0</span></td>
+                <td><span id="running" class="status-stopped">Stopped</span></td>
+                <td><span id="currentStep">-</span></td>
+                <td><span id="totalTests">0</span></td>
+                <td><span id="totalSuccesses">0</span></td>
+                <td><span id="totalFailures">0</span></td>
+                <td><span id="successRate">0.0%</span></td>
+                <td><span id="lastError">-</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="failures">
+        <span>Failures: </span>
+        <span id="failuresList">
+            <!-- Failure counts will be inserted here dynamically -->
+        </div>
+    </div>
+
+    <div id="stepTimings">
+        <h3>Step Timings</h3>
+        <table id="stepTimingsTable">
+            <thead>
+                <tr>
+                    <th>Step</th>
+                    <th>Start Time</th>
+                    <th>End Time</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody id="stepTimingsBody">
+                <!-- Step timing rows will be inserted here dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let socket;
+        let receivedEvents = 0;
+        let isTestRunning = false;
+        let latestData = null; // Store latest data for live duration updates
+
+        function connectSocket() {
+            socket = new WebSocket('ws://localhost:8080/reliabilitytest');
+
+            socket.onopen = () => {
+                console.log('Connected to reliability test server');
+                document.getElementById('connectionIndicator').className = 'connection-indicator connected';
+            };
+
+            socket.onmessage = (event) => {
+                document.getElementById("receivedEvents").innerHTML = receivedEvents++;
+                try {
+                    const data = JSON.parse(event.data);
+                    updateTestStatus(data);
+                } catch (error) {
+                    console.log("Failed parsing JSON from reliability test server:", error);
+                }
+            };
+
+            socket.onclose = () => {
+                console.log('Disconnected from reliability test server - reconnecting in 5 seconds...');
+                document.getElementById('connectionIndicator').className = 'connection-indicator disconnected';
+                setTimeout(connectSocket, 5000);
+            };
+
+            socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('connectionIndicator').className = 'connection-indicator disconnected';
+                socket.close();
+            };
+        }
+
+        function updateTestStatus(data) {
+            console.log("Got some data: %o", data)
+            latestData = data; // Store for live duration updates
+            // Update main status info
+            const runningEl = document.getElementById('running');
+            if (data.isRunning) {
+                runningEl.textContent = 'Running';
+                runningEl.className = 'status-running';
+                isTestRunning = true;
+            } else {
+                runningEl.textContent = 'Stopped';
+                runningEl.className = 'status-stopped';
+                isTestRunning = false;
+            }
+
+            for (const [k, v] of Object.entries(data)) {
+                const el = document.getElementById(k)
+                if ( el != null ) {
+                    el.innerHTML = v
+                }
+            }
+            
+            // Calculate and display success rate
+            const total = data.totalTests || 0;
+            const successful = data.totalSuccesses || 0;
+            const successRate = total > 0 ? ((successful / total) * 100).toFixed(1) : 0.0;
+            document.getElementById('successRate').textContent = successRate + '%';
+            
+            document.getElementById('lastError').textContent = data.LastError || '-';
+
+            // Update start/stop button
+            updateStartStopButton();
+
+            // Update step timings table
+            updateStepTimings(data.currentStepTimings);
+            
+            // Update failures by step
+            updateFailuresByStep(data.failuresByStep);
+        }
+
+        function updateFailuresByStep(failuresByStep) {
+            const failuresList = document.getElementById('failuresList');
+            failuresList.innerHTML = '';
+            
+            if (!failuresByStep || Object.keys(failuresByStep).length === 0) {
+                return;
+            }
+
+            // Sort steps alphabetically for consistent display
+            const sortedSteps = Object.keys(failuresByStep).sort();
+
+            sortedSteps.forEach(stepName => {
+                const failureCount = failuresByStep[stepName];
+                if (failureCount > 0) {
+                    const stepSpan = document.createElement('span');
+                    stepSpan.className = 'failure-name';
+                    stepSpan.textContent = stepName + ':';
+                    
+                    const countSpan = document.createElement('span');
+                    countSpan.className = 'failure-number';
+                    countSpan.textContent = failureCount;
+                    
+                    failuresList.appendChild(stepSpan);
+                    failuresList.appendChild(countSpan);
+                }
+            });
+        }
+
+        function updateStartStopButton() {
+            const button = document.getElementById('startStopButton');
+            if (isTestRunning) {
+                button.textContent = 'Stop Test';
+                button.className = 'start-stop-button running';
+            } else {
+                button.textContent = 'Start Test';
+                button.className = 'start-stop-button stopped';
+            }
+        }
+
+        function formatTimeForDisplay(timeString) {
+            if (!timeString || timeString === '0001-01-01T00:00:00Z') {
+                return '-';
+            }
+            
+            try {
+                const date = new Date(timeString);
+                return date.toLocaleString();
+            } catch (error) {
+                console.error('Error formatting time:', error);
+                return timeString; // fallback to original string
+            }
+        }
+
+        function calculateDuration(startTime, endTime) {
+            try {
+                const start = new Date(startTime);
+                const end = new Date(endTime);
+                return end.getTime() - start.getTime(); // Duration in milliseconds
+            } catch (error) {
+                console.error('Error calculating duration:', error);
+                return 0;
+            }
+        }
+
+        function formatDuration(durationMs) {
+            if (!durationMs || durationMs <= 0) {
+                return '0s';
+            }
+            
+            const seconds = Math.floor(durationMs / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${seconds % 60}s`;
+            } else {
+                return `${seconds}s`;
+            }
+        }
+
+        function getTimeoutForStep(stepName) {
+            if (!latestData || !latestData.config || !latestData.config.Timeouts) {
+                return 0;
+            }
+            return latestData.config.Timeouts[stepName] || 0;
+        }
+
+        function formatDurationWithTimeout(currentDurationMs, timeoutMs) {
+            const currentFormatted = formatDuration(currentDurationMs);
+            if (timeoutMs > 0) {
+                const timeoutFormatted = formatDuration(timeoutMs);
+                const isOverTimeout = currentDurationMs > timeoutMs;
+                const timeoutClass = isOverTimeout ? 'timeout-exceeded' : 'timeout-normal';
+                return `<span class="${timeoutClass}">${currentFormatted}</span> <span class="timeout">/ ${timeoutFormatted}</span>`;
+            }
+            return currentFormatted;
+        }
+
+        function updateLiveDuration(cell, data) {
+            const startTime = cell.getAttribute('data-start-time');
+            const stepName = cell.getAttribute('data-step-name');
+            if (!startTime || startTime === '0001-01-01T00:00:00Z') {
+                cell.textContent = '-';
+                return;
+            }
+            
+            try {
+                const start = new Date(startTime);
+                const now = new Date();
+                const duration = now.getTime() - start.getTime();
+                const timeoutMs = getTimeoutForStep(stepName, data) * 1000; // Convert to milliseconds
+                cell.innerHTML = formatDurationWithTimeout(duration, timeoutMs);
+            } catch (error) {
+                console.error('Error updating live duration:', error);
+                cell.textContent = '-';
+            }
+        }
+
+        function updateAllLiveDurations() {
+            const liveDurationCells = document.querySelectorAll('.live-duration');
+            liveDurationCells.forEach(cell => {
+                updateLiveDuration(cell, latestData);
+            });
+        }
+
+        // Update live durations every second
+        setInterval(updateAllLiveDurations, 1000);
+
+        function updateStepTimings(stepTimings) {
+            if (!stepTimings) {
+                console.log("No step timings, dfauq?")
+                return;
+            }
+
+            const tbody = document.getElementById('stepTimingsBody');
+            tbody.innerHTML = '';
+
+            
+            stepTimings.forEach((st, i) => {
+                const row = tbody.insertRow();
+                
+                row.insertCell(0).textContent = st.stepName;
+                
+                // Create time elements for start and end times
+                const startTimeCell = row.insertCell(1);
+                if (st.startTime && st.startTime !== '0001-01-01T00:00:00Z') {
+                    const startTimeEl = document.createElement('time');
+                    startTimeEl.setAttribute('datetime', st.startTime);
+                    startTimeEl.textContent = formatTimeForDisplay(st.startTime);
+                    startTimeCell.appendChild(startTimeEl);
+                } else {
+                    startTimeCell.textContent = '-';
+                }
+                
+                const endTimeCell = row.insertCell(2);
+                if (st.endTime && st.endTime !== '0001-01-01T00:00:00Z') {
+                    const endTimeEl = document.createElement('time');
+                    endTimeEl.setAttribute('datetime', st.endTime);
+                    endTimeEl.textContent = formatTimeForDisplay(st.endTime);
+                    endTimeCell.appendChild(endTimeEl);
+                } else {
+                    endTimeCell.textContent = '-';
+                }
+                
+                // Calculate and display duration
+                const durationCell = row.insertCell(3);
+                if (st.startTime && st.startTime !== '0001-01-01T00:00:00Z') {
+                    if (st.endTime && st.endTime !== '0001-01-01T00:00:00Z') {
+                        // Completed step - show only duration
+                        const duration = calculateDuration(st.startTime, st.endTime);
+                        durationCell.textContent = formatDuration(duration);
+                    } else {
+                        // Ongoing step - create live counter with timeout
+                        durationCell.setAttribute('data-start-time', st.startTime);
+                        durationCell.setAttribute('data-step-name', st.stepName);
+                        durationCell.classList.add('live-duration');
+                        updateLiveDuration(durationCell, latestData);
+                    }
+                } else {
+                    durationCell.textContent = '-';
+                }
+            });
+        }
+
+        function toggleTest() {
+            const action = isTestRunning ? 'stop' : 'start';
+            
+            fetch(`/reliabilitytest?action=${action}`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    console.error('Failed to', action, 'test:', response.statusText);
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling test:', error);
+            });
+        }
+
+        // Initial connection
+        connectSocket();
+    </script>
+</body>
+</html>
