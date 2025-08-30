@@ -137,7 +137,23 @@ func (h *ReliabilityTestHandler) removeClient(id string) {
 
 func (h *ReliabilityTestHandler) broadcastStatus() {
 	h.statusMutex.RLock()
-	status := h.status
+	// Create a deep copy of the status to avoid race conditions during JSON marshaling
+	status := ReliabilityTestStatus{
+		TotalTests:         h.status.TotalTests,
+		TotalSuccesses:     h.status.TotalSuccesses,
+		TotalFailures:      h.status.TotalFailures,
+		IsRunning:          h.status.IsRunning,
+		CurrentStep:        h.status.CurrentStep,
+		CurrentTestStart:   h.status.CurrentTestStart,
+		CurrentStepStart:   h.status.CurrentStepStart,
+		CurrentStepTimings: make([]StepTiming, len(h.status.CurrentStepTimings)),
+		FailuresByStep:     make(map[string]int),
+		Config:             h.status.Config,
+	}
+	copy(status.CurrentStepTimings, h.status.CurrentStepTimings)
+	for k, v := range h.status.FailuresByStep {
+		status.FailuresByStep[k] = v
+	}
 	h.statusMutex.RUnlock()
 
 	h.clientsMutex.Lock()
@@ -303,6 +319,11 @@ func (h *ReliabilityTestHandler) processStatusUpdate(status common.LabStatus) {
 
 	// Check for failure
 	if status.Initializer.Failed {
+		// Check if we've already processed failure for this test
+		if h.currentTestCtx == nil || h.currentTestCtx.Err() != nil {
+			h.log.Debug("test failure already processed, ignoring duplicate")
+			return
+		}
 		h.log.Warn("test failed", "step", h.status.CurrentStep)
 		h.handleStepFailure(h.status.CurrentStep, false)
 		return
@@ -373,6 +394,8 @@ func (h *ReliabilityTestHandler) clearStepTimer() {
 }
 
 func (h *ReliabilityTestHandler) handleStepFailure(step string, timedOut bool) {
+	h.log.Debug("handling step failure", "step", step, "timedOut", timedOut)
+
 	h.statusMutex.Lock()
 	h.status.TotalFailures++
 	h.status.TotalTests++
@@ -393,6 +416,8 @@ func (h *ReliabilityTestHandler) handleStepFailure(step string, timedOut bool) {
 	shouldAbort := h.abortSteps[step]
 	h.statusMutex.Unlock()
 
+	h.log.Debug("step failure handling", "step", step, "shouldAbort", shouldAbort)
+
 	if shouldAbort {
 		h.log.Warn("aborting test due to failure on critical step", "step", step, "timedOut", timedOut)
 		h.stopTest()
@@ -402,6 +427,7 @@ func (h *ReliabilityTestHandler) handleStepFailure(step string, timedOut bool) {
 }
 
 func (h *ReliabilityTestHandler) markTestComplete() {
+	h.log.Debug("marking test complete")
 	h.clearStepTimer()
 
 	h.statusMutex.Lock()
@@ -413,8 +439,11 @@ func (h *ReliabilityTestHandler) markTestComplete() {
 
 	// Signal test completion by cancelling the current test context
 	if h.currentTestCancel != nil {
+		h.log.Debug("cancelling current test context")
 		h.currentTestCancel()
 		h.currentTestCancel = nil
+	} else {
+		h.log.Warn("currentTestCancel is nil when trying to mark test complete")
 	}
 }
 
