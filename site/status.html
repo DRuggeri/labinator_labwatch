@@ -39,11 +39,17 @@
         .connection-indicator.disconnected {
             background-color: red;
         }
+        th {
+            color: #bebebe;
+            text-align: left;
+            font-weight: normal;
+            font-size: .8em;
+        }
     </style>
 </head>
 <body>
     <h1>Lab Status</h1>
-    <img class="logo" src="assets/logo-white.svg" />
+    <img class="logo" src="/assets/logo-white.svg" />
     <div id="overview">
         <span class="connection-indicator disconnected" id="connectionIndicator"></span>Status Events: <span id="receivedEvents"></span>
     </div>
