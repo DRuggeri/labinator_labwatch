@@ -94,7 +94,7 @@ func main() {
 	cfg := LabwatchConfig{
 		LokiAddress:         "boss.local:3100",
 		LokiQuery:           `{ host_name =~ ".+" } | json`,
-		LogPath:             "/var/tmplog/otelcol.jsonl",
+		LogPath:             "/var/log/tmplog/otelcol.jsonl",
 		LogTrace:            false,
 		TalosConfigFile:     "/home/boss/.talos/config",
 		PowerManagerPort:    "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
