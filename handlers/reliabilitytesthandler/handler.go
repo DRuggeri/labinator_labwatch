@@ -115,6 +115,12 @@ func (h *ReliabilityTestHandler) Watch(ctx context.Context, statusChan <-chan co
 				continue
 			}
 
+			// Only process status updates if a current test iteration context exists (we're ready to consume them)
+			if h.currentTestCtx == nil {
+				h.log.Debug("current test context not yet created, ignoring status update")
+				continue
+			}
+
 			h.processStatusUpdate(status)
 		}
 	}
@@ -240,14 +246,13 @@ func (h *ReliabilityTestHandler) runTest() error {
 	h.status.CurrentStepTimings = make([]StepTiming, 0)
 	h.statusMutex.Unlock()
 
-	// Create a new context for this individual test iteration
-	h.currentTestCtx, h.currentTestCancel = context.WithCancel(h.testCtx)
-
 	h.log.Info("starting new test iteration")
 
 	if err := h.startLab(); err != nil {
 		return fmt.Errorf("failed to start lab: %w", err)
 	}
+
+	h.currentTestCtx, h.currentTestCancel = context.WithCancel(h.testCtx)
 
 	// Wait for test completion or overall test stop
 	select {
