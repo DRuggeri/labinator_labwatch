@@ -428,7 +428,7 @@ INITLOOP:
 			log.Info("bootstrapping Kubernetes through control plane node", "node", name)
 			err = BootstrapEtcd(controlContext, i.talosConfig, node.IP, scenario, i.k8sContext, log)
 			if err != nil {
-				log.Error("bootstrapping etcd failed", "output", string(result))
+				log.Error("bootstrapping etcd failed", "error", err.Error())
 				initStatus.Failed = true
 				i.sendStatusUpdate(*initStatus)
 				return
@@ -555,7 +555,7 @@ func BootstrapEtcd(ctx context.Context, talosConfig string, ip string, talosCont
 		return err
 	}
 
-	//Wait for port 6443 in case node is restarting and still coming up
+	//Wait for port 50000 in case node is restarting and still coming up
 	for {
 		select {
 		case <-ctx.Done():
@@ -563,7 +563,7 @@ func BootstrapEtcd(ctx context.Context, talosConfig string, ip string, talosCont
 		default:
 		}
 
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:6443", ip), time.Second)
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:50000", ip), time.Second)
 		if err != nil {
 			time.Sleep(time.Second)
 		} else {
