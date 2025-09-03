@@ -495,8 +495,30 @@ func StartVMsOnHypervisor(ctx context.Context, ip string, nodes []NodeConfig, lo
 				fmt.Sprintf("  --disk /var/lib/libvirt/images/%s.qcow2,device=disk,bus=virtio", node.Name) +
 				fmt.Sprintf("  --graphics vnc,listen=0.0.0.0,port=%d", 5901+i) +
 				fmt.Sprintf("  --network network=default,model=virtio,mac=%s", node.MAC) +
+				fmt.Sprintf("  --console file,path=/var/log/vm-console-%s.log", node.Name) +
 				"              --memory 2048 --vcpus 2 --os-variant ubuntu22.10 --virt-type kvm" +
-				"              --boot network --noautoconsole --import"
+				"              --boot network,useserial=on --noautoconsole --import"
+
+				/*
+					Error message in /var/log/vm-console-w4-virtual.log:
+					iPXE 1.0.0+git-20190125.36a4c85-5.1 -- Open Source Network Boot Firmware -- http
+					://ipxe.org
+					Features: DNS HTTP iSCSI NFS TFTP AoE ELF MBOOT PXE bzImage Menu PXEXT
+
+					net0: de:ad:be:ef:30:04 using virtio-net on 0000:01:00.0 (open)
+					[Link:up, TX:0 TXE:0 RX:0 RXE:0]
+					Configuring (net0 de:ad:be:ef:30:04).................. ok
+					net0: 192.168.122.34/255.255.255.0 gw 192.168.122.1
+					net0: fd00:ab:cd:0:dcad:beff:feef:3004/64
+					net0: fe80::dcad:beff:feef:3004/64
+					Next server: 192.168.122.3
+					Filename: http://boss.local/chain-boot.ipxe
+					http://boss.local/chain-boot.ipxe.................. Connection timed out (http:/
+					/ipxe.org/4c116035)
+					No more network devices
+
+					No bootable device.
+				*/
 
 			command := exec.CommandContext(ctx, "ssh",
 				"-o", "StrictHostKeyChecking=no",
@@ -555,20 +577,24 @@ func BootstrapEtcd(ctx context.Context, talosConfig string, ip string, talosCont
 		return err
 	}
 
-	//Wait for port 50000 in case node is restarting and still coming up
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
+	//Wait for port 6443 and then 50000 in case node is restarting and still coming up
+	ports := []int{6443, 50000}
+	for _, port := range ports {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
 
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:50000", ip), time.Second)
-		if err != nil {
-			time.Sleep(time.Second)
-		} else {
-			conn.Close()
-			break
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, port), time.Second)
+			if err != nil {
+				log.Debug("unable to connect", "target", fmt.Sprintf("%s:%d", ip, port), "error", err.Error())
+				time.Sleep(time.Second)
+			} else {
+				conn.Close()
+				break
+			}
 		}
 	}
 
