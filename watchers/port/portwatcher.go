@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-var sleepDuration = time.Duration(100) * time.Millisecond
 var connectionCheckInterval = time.Second
 var recheckInterval = time.Duration(5) * time.Second
 
@@ -103,10 +102,7 @@ func (w *PortWatcher) Watch(controlContext context.Context, resultChan chan<- Po
 			}
 			resultChan <- endpointsCopy
 			w.mux.Unlock()
-		default:
-			// Not ready to read from control channel or watcher - carry on
 		}
-		time.Sleep(sleepDuration)
 	}
 }
 

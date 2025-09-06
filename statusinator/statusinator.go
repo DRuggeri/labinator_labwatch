@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
@@ -94,8 +93,6 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 			} else {
 				m.log.Error("error encountered reading events")
 			}
-		default:
-			time.Sleep(time.Millisecond * 100)
 		}
 	}
 }

@@ -652,9 +652,6 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 				} else {
 					log.Error("error encountered reading events")
 				}
-			default:
-				time.Sleep(time.Millisecond * 100)
-				continue
 			}
 
 			if broadcastStatusUpdate {

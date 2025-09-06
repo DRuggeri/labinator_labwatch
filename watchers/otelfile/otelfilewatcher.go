@@ -245,7 +245,7 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 
 		// See if there are any messages to read from the internal channels
 		// and drain them all if so
-	OUTER:
+	INNER:
 		for {
 			select {
 			case event := <-w.internalLogChan:
@@ -260,7 +260,7 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 			case stats := <-w.internalStatChan:
 				if time.Since(lastStatusUpdate) < statUpdateThrottle {
 					// Throttle stats updates
-					break OUTER
+					break INNER
 				}
 				lastStatusUpdate = time.Now()
 				select {
@@ -272,10 +272,8 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 					w.log.Warn("stats channel full, dropping stats")
 				}
 			default:
-				break OUTER
+				break INNER
 			}
-
-			time.Sleep(5 * time.Millisecond)
 		}
 	}
 }

@@ -160,29 +160,16 @@ func (w *TalosWatcher) Watch(controlContext context.Context, resultChan chan<- m
 		select {
 		case <-controlContext.Done():
 			return
-		default:
-			// Not ready to read from control channel - carry on
+		case nodeStatus := <-w.internalChan:
+			w.Status[nodeStatus.Node] = nodeStatus
+
+			// Make a copy of all data to send to the chan
+			og, _ := json.Marshal(w.Status)
+			cpy := map[string]NodeStatus{}
+			json.Unmarshal(og, &cpy)
+
+			resultChan <- cpy
 		}
-
-		// See if there are any messsages to read from the clients
-	OUTER:
-		for {
-			select {
-			case nodeStatus := <-w.internalChan:
-				w.Status[nodeStatus.Node] = nodeStatus
-
-				// Make a copy of all data to send to the chan
-				og, _ := json.Marshal(w.Status)
-				cpy := map[string]NodeStatus{}
-				json.Unmarshal(og, &cpy)
-
-				resultChan <- cpy
-			default:
-				break OUTER
-			}
-		}
-
-		time.Sleep(sleepDuration)
 	}
 }
 

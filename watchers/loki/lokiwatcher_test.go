@@ -96,14 +96,8 @@ func (f fileDumper) dumpFromFile(w http.ResponseWriter, r *http.Request) {
 
 	f.log.Debug("read completed", "lines", f.Lines)
 
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		default:
-			time.Sleep(time.Second)
-		}
-	}
+	// Stay alive until cancelled
+	<-r.Context().Done()
 }
 func TestFromLogFile(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
