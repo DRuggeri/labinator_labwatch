@@ -89,11 +89,11 @@
             color: #e74c3c;
             font-weight: bold;
         }
-        .failure-name {
+        .issue-name {
             color: #f39c12;
             margin-right: 8px;
         }
-        .failure-number {
+        .issue-number {
             color: #e74c3c;
             font-weight: bold;
             margin-right: 15px;
@@ -115,8 +115,9 @@
                 <th>Status</th>
                 <th>Current Step</th>
                 <th>Total Iterations</th>
-                <th>Successful Iterations</th>
-                <th>Failed Iterations</th>
+                <th>Successful</th>
+                <th>Failed</th>
+                <th>Timeout</th>
                 <th>Success Rate</th>
                 <th>Last Error</th>
             </tr>
@@ -127,6 +128,7 @@
                 <td><span id="totalTests">0</span></td>
                 <td><span id="totalSuccesses">0</span></td>
                 <td><span id="totalFailures">0</span></td>
+                <td><span id="totalTimeouts">0</span></td>
                 <td><span id="successRate">0.0%</span></td>
                 <td><span id="lastError">-</span></td>
             </tr>
@@ -136,6 +138,12 @@
     <div id="failures">
         <span>Failures: </span>
         <span id="failuresList">
+            <!-- Failure counts will be inserted here dynamically -->
+        </div>
+    </div>
+    <div id="timeouts">
+        <span>Timeouts: </span>
+        <span id="timeoutsList">
             <!-- Failure counts will be inserted here dynamically -->
         </div>
     </div>
@@ -231,33 +239,34 @@
             updateStepTimings(data.currentStepTimings);
             
             // Update failures by step
-            updateFailuresByStep(data.failuresByStep);
+            updateFailuresByStep(data.failuresByStep, 'failuresList');
+            updateFailuresByStep(data.timeoutsByStep, 'timeoutsList');
         }
 
-        function updateFailuresByStep(failuresByStep) {
-            const failuresList = document.getElementById('failuresList');
-            failuresList.innerHTML = '';
+        function updateFailuresByStep(issuesByStep, listId) {
+            const issueList = document.getElementById(listId);
+            issueList.innerHTML = '';
             
-            if (!failuresByStep || Object.keys(failuresByStep).length === 0) {
+            if (!issuesByStep || Object.keys(issuesByStep).length === 0) {
                 return;
             }
 
             // Sort steps alphabetically for consistent display
-            const sortedSteps = Object.keys(failuresByStep).sort();
+            const sortedSteps = Object.keys(issuesByStep).sort();
 
             sortedSteps.forEach(stepName => {
-                const failureCount = failuresByStep[stepName];
-                if (failureCount > 0) {
+                const issueCount = issuesByStep[stepName];
+                if (issueCount > 0) {
                     const stepSpan = document.createElement('span');
-                    stepSpan.className = 'failure-name';
+                    stepSpan.className = 'issue-name';
                     stepSpan.textContent = stepName + ':';
                     
                     const countSpan = document.createElement('span');
-                    countSpan.className = 'failure-number';
-                    countSpan.textContent = failureCount;
+                    countSpan.className = 'issue-number';
+                    countSpan.textContent = issueCount;
                     
-                    failuresList.appendChild(stepSpan);
-                    failuresList.appendChild(countSpan);
+                    issueList.appendChild(stepSpan);
+                    issueList.appendChild(countSpan);
                 }
             });
         }

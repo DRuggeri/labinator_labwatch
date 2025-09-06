@@ -35,8 +35,10 @@ type ReliabilityTestStatus struct {
 	// Overall statistics
 	TotalSuccesses int            `json:"totalSuccesses"`
 	TotalFailures  int            `json:"totalFailures"`
+	TotalTimeouts  int            `json:"totalTimeouts"`
 	TotalTests     int            `json:"totalTests"`
 	FailuresByStep map[string]int `json:"failuresByStep"`
+	TimeoutsByStep map[string]int `json:"timeoutsByStep"`
 
 	IsRunning          bool         `json:"isRunning"`
 	CurrentStep        string       `json:"currentStep"`
@@ -86,6 +88,7 @@ func NewReliabilityTestHandler(config *Config, log *slog.Logger) (*ReliabilityTe
 		},
 		status: ReliabilityTestStatus{
 			FailuresByStep:     make(map[string]int),
+			TimeoutsByStep:     make(map[string]int),
 			CurrentStepTimings: make([]StepTiming, 0),
 			Config:             config,
 		},
@@ -148,17 +151,22 @@ func (h *ReliabilityTestHandler) broadcastStatus() {
 		TotalTests:         h.status.TotalTests,
 		TotalSuccesses:     h.status.TotalSuccesses,
 		TotalFailures:      h.status.TotalFailures,
+		TotalTimeouts:      h.status.TotalTimeouts,
 		IsRunning:          h.status.IsRunning,
 		CurrentStep:        h.status.CurrentStep,
 		CurrentTestStart:   h.status.CurrentTestStart,
 		CurrentStepStart:   h.status.CurrentStepStart,
 		CurrentStepTimings: make([]StepTiming, len(h.status.CurrentStepTimings)),
 		FailuresByStep:     make(map[string]int),
+		TimeoutsByStep:     make(map[string]int),
 		Config:             h.status.Config,
 	}
 	copy(status.CurrentStepTimings, h.status.CurrentStepTimings)
 	for k, v := range h.status.FailuresByStep {
 		status.FailuresByStep[k] = v
+	}
+	for k, v := range h.status.TimeoutsByStep {
+		status.TimeoutsByStep[k] = v
 	}
 	h.statusMutex.RUnlock()
 
@@ -402,9 +410,14 @@ func (h *ReliabilityTestHandler) handleStepFailure(step string, timedOut bool) {
 	h.log.Debug("handling step failure", "step", step, "timedOut", timedOut)
 
 	h.statusMutex.Lock()
-	h.status.TotalFailures++
 	h.status.TotalTests++
-	h.status.FailuresByStep[step]++
+	if timedOut {
+		h.status.TotalTimeouts++
+		h.status.TimeoutsByStep[step]++
+	} else {
+		h.status.TotalFailures++
+		h.status.FailuresByStep[step]++
+	}
 
 	// Update current step timing
 	if len(h.status.CurrentStepTimings) > 0 {
@@ -413,7 +426,7 @@ func (h *ReliabilityTestHandler) handleStepFailure(step string, timedOut bool) {
 			lastTiming.EndTime = time.Now()
 			lastTiming.Duration = lastTiming.EndTime.Sub(lastTiming.StartTime).Seconds()
 			lastTiming.TimedOut = timedOut
-			lastTiming.Failed = true
+			lastTiming.Failed = !timedOut
 		}
 	}
 
