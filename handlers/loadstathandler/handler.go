@@ -318,7 +318,18 @@ func (h *LoadStatSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		case <-h.controlContext.Done():
 			return
 		case stat := <-ch:
-			if err := conn.WriteJSON(stat); err != nil {
+			statCopy := LoadStats{
+				Clients: make(map[string]OKNOK),
+				Servers: make(map[string]OKNOK),
+			}
+			for k, v := range stat.Clients {
+				statCopy.Clients[k] = v
+			}
+			for k, v := range stat.Servers {
+				statCopy.Servers[k] = v
+			}
+
+			if err := conn.WriteJSON(statCopy); err != nil {
 				h.log.Debug("write error", "error", err.Error())
 				return
 			}

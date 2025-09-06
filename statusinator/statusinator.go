@@ -69,13 +69,56 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 		case s, ok := <-status:
 			if ok {
 				m.log.Debug("received status update")
-				b, err := json.Marshal(BriefStatus{
-					Power:       s.Power,
-					Logs:        s.Logs,
-					Initializer: s.Initializer,
-				})
+
+				// Create a deep copy of everything to prevent concurrent modification
+				briefStatus := BriefStatus{
+					Power: powerman.PowerStatus{
+						P1: s.Power.P1,
+						P2: s.Power.P2,
+						P3: s.Power.P3,
+						P4: s.Power.P4,
+						P5: s.Power.P5,
+						P6: s.Power.P6,
+						P7: s.Power.P7,
+						P8: s.Power.P8,
+					},
+					Logs: common.LogStats{
+						NumMessages:          s.Logs.NumMessages,
+						NumEmergencyMessages: s.Logs.NumEmergencyMessages,
+						NumAlertMessages:     s.Logs.NumAlertMessages,
+						NumCriticalMessages:  s.Logs.NumCriticalMessages,
+						NumErrorMessages:     s.Logs.NumErrorMessages,
+						NumWarnMessages:      s.Logs.NumWarnMessages,
+						NumNoticeMessages:    s.Logs.NumNoticeMessages,
+						NumInfoMessages:      s.Logs.NumInfoMessages,
+						NumDebugMessages:     s.Logs.NumDebugMessages,
+						NumDHCPDiscover:      s.Logs.NumDHCPDiscover,
+						NumDHCPLeased:        s.Logs.NumDHCPLeased,
+					},
+					Initializer: talosinitializer.InitializerStatus{
+						LabName:                s.Initializer.LabName,
+						NumHypervisors:         s.Initializer.NumHypervisors,
+						InitializedHypervisors: s.Initializer.InitializedHypervisors,
+						NumNodes:               s.Initializer.NumNodes,
+						InitializedNodes:       s.Initializer.InitializedNodes,
+						NumPods:                s.Initializer.NumPods,
+						InitializedPods:        s.Initializer.InitializedPods,
+						CurrentStep:            s.Initializer.CurrentStep,
+						Failed:                 s.Initializer.Failed,
+						TimeSpent:              make(map[string]int),
+					},
+				}
+
+				// Ignore the TimeSpent map
+				/*
+					for k, v := range s.Initializer.TimeSpent {
+						briefStatus.Initializer.TimeSpent[k] = v
+					}
+				*/
+
+				b, err := json.Marshal(briefStatus)
 				if err != nil {
-					m.log.Error("failed to marshal to JSON", "object", b)
+					m.log.Error("failed to marshal to JSON", "error", err)
 					return
 				}
 				m.send("status", b)
@@ -85,6 +128,9 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 		case e, ok := <-events:
 			if ok {
 				m.log.Debug("received log event")
+				if e.Attributes == nil {
+					e.Attributes = make(map[string]string)
+				}
 				payload := fmt.Sprintf("%s [%s] %s: %s", e.Node, e.Level, e.Service, e.Message)
 				if len(payload) > 80 {
 					payload = payload[:80]
