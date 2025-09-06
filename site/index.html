@@ -56,7 +56,7 @@
 			const ok = await backgroundSend(`/setlab?lab=${name}`)
 			if (ok) {
 				console.log(`lab set to ${name}`);
-				await navigateBottomWindow('http://boss.local:8080/status.html');
+				await navigateBottomWindow('http://boss.local:8080/loadstatus.html');
 				window.location.href = 'http://boss.local:8080/progress.html';
 			} else {
 				console.log(`background request failed`);
