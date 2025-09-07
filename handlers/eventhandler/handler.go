@@ -61,8 +61,6 @@ func (h *EventReceiveHandler) RemoveClient(id string) {
 func (h *EventReceiveHandler) BroadcastEvent(event common.LogEvent) {
 	h.clientsMutex.Lock()
 	if len(h.clients) > 0 {
-		h.log.Debug("broadcasting event", "clients", len(h.clients))
-
 		// Create a copy of clients to avoid holding lock during broadcast
 		clientsCopy := make(map[string]chan<- common.LogEvent, len(h.clients))
 		for k, v := range h.clients {

@@ -545,7 +545,7 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 		cancel()
 		return nil, err
 	}
-	events := make(chan common.LogEvent, 100) // Enough to hold a burst of events from otelcol
+	events := make(chan common.LogEvent, 1000) // Large buffer for bursts of events
 	stats := make(chan common.LogStats, 5)
 	go lWatcher.Watch(ctx, events, stats)
 
@@ -569,6 +569,49 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 	go kubeWatcher.Watch(ctx, kubeInfo)
 
 	log = log.With("operation", "watchloop")
+
+	// Dedicated event processing for high-throughput event handling
+	go func() {
+		eventBatch := make([]common.LogEvent, 0, 100) // Reuse slice to reduce allocations
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-events:
+				if !ok {
+					log.Error("error encountered reading events")
+					continue
+				}
+
+				// Reset batch and add first event
+				eventBatch = eventBatch[:0]
+				eventBatch = append(eventBatch, e)
+
+				// Drain additional events if available (non-blocking)
+			DrainEvents:
+				for len(eventBatch) < 100 {
+					select {
+					case additionalEvent, ok := <-events:
+						if ok {
+							eventBatch = append(eventBatch, additionalEvent)
+						} else {
+							break DrainEvents
+						}
+					default:
+						break DrainEvents
+					}
+				}
+
+				// Broadcast all events in the batch
+				for _, event := range eventBatch {
+					eventReceiveHandler.BroadcastEvent(event)
+				}
+			}
+		}
+	}()
+
+	// Main status update loop
 	go func() {
 		for {
 			broadcastStatusUpdate := false
@@ -655,12 +698,6 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading log stats")
-				}
-			case e, ok := <-events:
-				if ok {
-					eventReceiveHandler.BroadcastEvent(e)
-				} else {
-					log.Error("error encountered reading events")
 				}
 			}
 
