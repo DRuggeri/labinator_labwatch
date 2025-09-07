@@ -74,19 +74,33 @@ func NewStatHandlers(controlContext context.Context, l *slog.Logger) (*LoadStatR
 			case <-controlContext.Done():
 				return
 			case stat := <-incomingStatChan:
-				receiveHandler.clientsMutex.Lock()
-				clientsCopy := make([]chan<- LoadStats, 0, len(clients))
-				for _, ch := range clients {
-					clientsCopy = append(clientsCopy, ch)
-				}
-				receiveHandler.clientsMutex.Unlock()
+				if len(clients) > 0 {
+					receiveHandler.dataMutex.RLock()
+					statCopy := LoadStats{
+						Clients: make(map[string]OKNOK),
+						Servers: make(map[string]OKNOK),
+					}
+					for k, v := range stat.Clients {
+						statCopy.Clients[k] = v
+					}
+					for k, v := range stat.Servers {
+						statCopy.Servers[k] = v
+					}
+					receiveHandler.dataMutex.RUnlock()
 
-				// Broadcast without holding the lock
-				for _, ch := range clientsCopy {
-					select {
-					case ch <- stat:
-					default:
-						// Skip slow clients
+					receiveHandler.clientsMutex.Lock()
+					clientsCopy := make([]chan<- LoadStats, 0, len(clients))
+					for _, ch := range clients {
+						clientsCopy = append(clientsCopy, ch)
+					}
+					receiveHandler.clientsMutex.Unlock()
+
+					for _, ch := range clientsCopy {
+						select {
+						case ch <- statCopy:
+						default:
+							// Skip slow clients
+						}
 					}
 				}
 			}
@@ -269,8 +283,8 @@ func (h *LoadStatReceiveHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// safeCopyForMarshaling creates a deep copy of LoadStats to prevent concurrent map access during JSON marshaling
-func (h *LoadStatReceiveHandler) safeCopyForMarshaling() LoadStats {
+// getStatsCopy creates a deep copy of LoadStats to prevent concurrent map access during JSON marshaling
+func (h *LoadStatReceiveHandler) getStatsCopy() LoadStats {
 	h.dataMutex.RLock()
 	defer h.dataMutex.RUnlock()
 
@@ -294,7 +308,7 @@ func (h *LoadStatReceiveHandler) safeCopyForMarshaling() LoadStats {
 func (h *LoadStatSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") == "" {
 		// Use safe copy for JSON marshaling
-		stats := h.mainHandler.safeCopyForMarshaling()
+		stats := h.mainHandler.getStatsCopy()
 		b, _ := json.Marshal(stats)
 		w.Write(b)
 		return
@@ -318,18 +332,7 @@ func (h *LoadStatSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		case <-h.controlContext.Done():
 			return
 		case stat := <-ch:
-			statCopy := LoadStats{
-				Clients: make(map[string]OKNOK),
-				Servers: make(map[string]OKNOK),
-			}
-			for k, v := range stat.Clients {
-				statCopy.Clients[k] = v
-			}
-			for k, v := range stat.Servers {
-				statCopy.Servers[k] = v
-			}
-
-			if err := conn.WriteJSON(statCopy); err != nil {
+			if err := conn.WriteJSON(stat); err != nil {
 				h.log.Debug("write error", "error", err.Error())
 				return
 			}
