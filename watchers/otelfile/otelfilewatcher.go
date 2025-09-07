@@ -239,29 +239,34 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 				w.currentFile.Close()
 			}
 			return
-		default:
-			// Not ready to read from control channel - carry on
-		}
-
-		// See if there are any messages to read from the internal channels
-		// and drain them all if so
-	INNER:
-		for {
-			select {
-			case event := <-w.internalLogChan:
+		case event := <-w.internalLogChan:
+			// Drain all available events to avoid blocking the file reader
+			events := []common.LogEvent{event}
+		DrainEvents:
+			for {
 				select {
-				case eventChan <- event:
+				case additionalEvent := <-w.internalLogChan:
+					events = append(events, additionalEvent)
+				default:
+					break DrainEvents
+				}
+			}
+
+			// Forward all events
+			for _, e := range events {
+				select {
+				case eventChan <- e:
 					if w.trace {
 						w.log.Debug("forwarded event to main channel")
 					}
 				default:
 					w.log.Warn("event channel full, dropping event")
 				}
-			case stats := <-w.internalStatChan:
-				if time.Since(lastStatusUpdate) < statUpdateThrottle {
-					// Throttle stats updates
-					break INNER
-				}
+			}
+		case stats := <-w.internalStatChan:
+			if time.Since(lastStatusUpdate) < statUpdateThrottle {
+				// Throttle stats updates - skip this update
+			} else {
 				lastStatusUpdate = time.Now()
 				select {
 				case statChan <- stats:
@@ -271,8 +276,16 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 				default:
 					w.log.Warn("stats channel full, dropping stats")
 				}
-			default:
-				break INNER
+			}
+			// Drain any additional stats to avoid blocking
+		DrainStats:
+			for {
+				select {
+				case <-w.internalStatChan:
+					// Discard additional stats since we already sent one recently
+				default:
+					break DrainStats
+				}
 			}
 		}
 	}
