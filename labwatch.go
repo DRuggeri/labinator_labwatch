@@ -140,6 +140,7 @@ func main() {
 
 	var initializerCtx context.Context
 	var initializerCancel context.CancelFunc
+	var initializerDone chan struct{}
 	initializer, err := talosinitializer.NewTalosInitializer(cfg.TalosConfigFile, cfg.TalosScenarioConfig, cfg.TalosScenariosDir, "koob", log)
 	if err != nil {
 		log.Error("failed to create the Talos initializer", "error", err.Error())
@@ -298,6 +299,11 @@ func main() {
 		// Already running a lab? Bail on it
 		if initializerCancel != nil {
 			initializerCancel()
+			if initializerDone != nil {
+				log.Debug("waiting for previous initializer to terminate")
+				<-initializerDone
+				log.Debug("previous initializer terminated")
+			}
 		}
 
 		log.Info("configuring lab", "lab", activeLab, "numWatchEndpoints", len(endpoints))
@@ -322,7 +328,11 @@ func main() {
 		statusWatcher.UpdateStatus(updatedStatus)
 
 		initializerCtx, initializerCancel = context.WithCancel(mainCtx)
-		go initializer.Initialize(initializerCtx, lab, labMan, pMan)
+		initializerDone = make(chan struct{})
+		go func() {
+			defer close(initializerDone)
+			initializer.Initialize(initializerCtx, lab, labMan, pMan)
+		}()
 	})
 
 	http.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {
