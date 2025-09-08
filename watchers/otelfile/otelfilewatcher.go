@@ -80,7 +80,7 @@ func (w *OtelFileWatcher) openFile(tail bool) error {
 		w.reader = bufio.NewReader(w.currentFile)
 	}
 
-	w.log.Info("opened file for tailing", "path", w.path, "size", info.Size(), "tail", tail)
+	w.log.Debug("opened file for tailing", "path", w.path, "size", info.Size(), "tail", tail)
 	return nil
 }
 
