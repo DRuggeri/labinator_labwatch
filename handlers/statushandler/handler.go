@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/common"
@@ -189,6 +190,7 @@ func (h *StatusSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	currentStatus := h.watcher.GetCurrentStatus()
 	safeCopy := h.watcher.safeCopyForMarshaling(currentStatus)
 	data, _ := json.Marshal(safeCopy)
+	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		h.log.Info("failed to send initial status", "error", err.Error())
 		return
@@ -202,6 +204,7 @@ func (h *StatusSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case status := <-thisChan:
 			safeCopy := h.watcher.safeCopyForMarshaling(status)
 			data, _ := json.Marshal(safeCopy)
+			conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 				h.log.Debug("client disconnected", "error", err.Error())
 				return

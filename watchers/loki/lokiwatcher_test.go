@@ -86,6 +86,7 @@ func (f fileDumper) dumpFromFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
 			f.log.Error("failed to write message", "error", err.Error())
 			return

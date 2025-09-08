@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/google/uuid"
@@ -112,6 +113,7 @@ func (h *EventSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		case event := <-thisChan:
 			data, _ := json.Marshal(event)
+			conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 				h.log.Debug("client disconnected", "error", err.Error())
 				return
