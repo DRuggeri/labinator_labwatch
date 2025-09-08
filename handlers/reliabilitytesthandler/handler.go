@@ -100,7 +100,7 @@ func NewReliabilityTestHandler(config *Config, log *slog.Logger) (*ReliabilityTe
 // Watch continuously processes status updates from the provided channel
 // It always runs to avoid blocking the channel, but only acts on status when a test is running
 func (h *ReliabilityTestHandler) Watch(ctx context.Context, statusChan <-chan common.LabStatus) {
-	h.log.Info("starting reliability test status watcher")
+	h.log.Debug("starting reliability test status watcher")
 
 	for {
 		select {
