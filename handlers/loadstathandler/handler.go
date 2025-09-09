@@ -77,8 +77,16 @@ func NewStatHandlers(controlContext context.Context, l *slog.Logger) (*LoadStatR
 				if len(clients) > 0 {
 					receiveHandler.dataMutex.RLock()
 					statCopy := LoadStats{
-						Clients: make(map[string]OKNOK),
-						Servers: make(map[string]OKNOK),
+						TotalServerOk:  stat.TotalServerOk,
+						TotalServerNok: stat.TotalServerNok,
+						TotalClientOk:  stat.TotalClientOk,
+						TotalClientNok: stat.TotalClientNok,
+						ServerOkRate:   stat.ServerOkRate,
+						ServerNokRate:  stat.ServerNokRate,
+						ClientOkRate:   stat.ClientOkRate,
+						ClientNokRate:  stat.ClientNokRate,
+						Clients:        make(map[string]OKNOK),
+						Servers:        make(map[string]OKNOK),
 					}
 					for k, v := range stat.Clients {
 						statCopy.Clients[k] = v
