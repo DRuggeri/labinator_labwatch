@@ -23,6 +23,7 @@ import (
 	"github.com/DRuggeri/labwatch/handlers/eventhandler"
 	"github.com/DRuggeri/labwatch/handlers/loadstathandler"
 	"github.com/DRuggeri/labwatch/handlers/reliabilitytesthandler"
+	"github.com/DRuggeri/labwatch/handlers/scalerhandler"
 	"github.com/DRuggeri/labwatch/handlers/statushandler"
 	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
@@ -141,6 +142,7 @@ func main() {
 	var initializerCtx context.Context
 	var initializerCancel context.CancelFunc
 	var initializerDone chan struct{}
+	var initializerMutex sync.Mutex
 	initializer, err := talosinitializer.NewTalosInitializer(cfg.TalosConfigFile, cfg.TalosScenarioConfig, cfg.TalosScenariosDir, "koob", log)
 	if err != nil {
 		log.Error("failed to create the Talos initializer", "error", err.Error())
@@ -214,6 +216,13 @@ func main() {
 	go reliabilityHandler.Watch(mainCtx, reliabilityStatusChan)
 
 	http.Handle("/reliabilitytest", reliabilityHandler)
+
+	scalerHandler, err := scalerhandler.NewScalerHandler("", cfg.PodWatchNamespace, log)
+	if err != nil {
+		log.Error("failed to create scaler handler", "error", err)
+		os.Exit(1)
+	}
+	http.Handle("/scale", scalerHandler)
 
 	resetWatchers := func() {
 		log.Info("resetting watchers")
@@ -297,6 +306,7 @@ func main() {
 		}
 
 		// Already running a lab? Bail on it
+		initializerMutex.Lock()
 		if initializerCancel != nil {
 			initializerCancel()
 			if initializerDone != nil {
@@ -333,6 +343,7 @@ func main() {
 			defer close(initializerDone)
 			initializer.Initialize(initializerCtx, lab, labMan, pMan)
 		}()
+		initializerMutex.Unlock()
 	})
 
 	http.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {

@@ -126,7 +126,6 @@
 					<p style="font-size:.5em">
 						What good is a lab without experimenting?
 						The Chaos menu lets you inject a little insanity into the lab.
-						Right now you can only kill off or restart nodes to see what happens.
 					</p>
 					<p style="font-size:.5em">
 						In future versions of Labinator, we will be able to add load to the system, kill Kubernetes pods, kill VMs, etc and additional observability options will let you see how the system reacts.
@@ -320,12 +319,20 @@
 
 
 				<section id="chaos" data-name="Chaos">
+					<a href="#/scale-load">Change the Load</a><br />
 					<a href="#/kill-box">Kill a Box</a><br />
 					<a href="#/restart-box">Restart a Box</a><br />
 					<!--
 						<a href="#/kill-net">Kill a Box's Network</a><br />
 						<a href="#/kill-az">Kill an AZ's Network</a><br />
 					-->
+				</section>
+				<section id="scale-load">
+					Add <a onclick="sendThenSlide('/scale?load=client&operation=add&number=1', 'chaos');">1 client</a> - <a onclick="sendThenSlide('/scale?load=client&operation=add&number=3', 'chaos');">3 clients</a><br />
+					Kill <a onclick="sendThenSlide('/scale?load=client&operation=sub&number=1', 'chaos');">1 client</a> - <a onclick="sendThenSlide('/scale?load=client&operation=sub&number=3', 'chaos');">3 clients</a><br />
+					<br />
+					Add <a onclick="sendThenSlide('/scale?load=server&operation=add&number=1', 'chaos');">1 server</a> - <a onclick="sendThenSlide('/scale?load=server&operation=add&number=3', 'chaos');">3 servers</a><br />
+					Kill <a onclick="sendThenSlide('/scale?load=server&operation=sub&number=1', 'chaos');">1 server</a> - <a onclick="sendThenSlide('/scale?load=server&operation=sub&number=3', 'chaos');">3 servers</a><br />
 				</section>
 				<section id="kill-box">
 					<a onclick="sendThenSlide('/power?action=turnoff&port=p1', 'chaos');">Kill Box 1</a><br />
