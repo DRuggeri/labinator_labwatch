@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/DRuggeri/labwatch/watchers/common"
@@ -130,17 +129,9 @@ func (w *OtelFileWatcher) checkFileRotation() bool {
 		return true
 	}
 
-	// Look at inode first
-	if newStat, ok := info.Sys().(*syscall.Stat_t); ok {
-		if oldStat, ok2 := w.lastFileInfo.Sys().(*syscall.Stat_t); ok2 {
-			if newStat.Ino != oldStat.Ino {
-				w.log.Debug("file rotation detected - different inode",
-					"path", w.path,
-					"oldInode", oldStat.Ino,
-					"newInode", newStat.Ino)
-				return true
-			}
-		}
+	// Check inode (platform-specific implementation)
+	if w.checkInodeRotation(info, w.lastFileInfo) {
+		return true
 	}
 
 	// Check if size decreased (strong indicator of rotation)
