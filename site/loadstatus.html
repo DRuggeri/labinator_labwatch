@@ -174,7 +174,7 @@
         <div class="connection-status">
             <span class="connection-indicator disconnected" id="statusConnectionIndicator"></span>Status
         </div>
-        <div id="container-status" style="display: none;">
+        <div id="container-status" style="display: none;" data-highlight-changes="true">
             <div class="container-status">
                 <span class="container-count" id="clientContainerCount">?</span> Clients
             </div>
@@ -525,8 +525,8 @@
                 }
             }
 
-            document.getElementById('clientContainerCount').innerHTML = clientCount
-            document.getElementById('serverContainerCount').innerHTML = serverCount
+            updateSpanValue(document.getElementById('clientContainerCount'), clientCount)
+            updateSpanValue(document.getElementById('serverContainerCount'), serverCount)
         }
     </script>
 
@@ -586,7 +586,13 @@
         const serverOkGauge = createGauge(document.getElementById('serverOkGauge').getContext('2d'), 'Server OK Rate');
 
         function updateGauges(serverOkRate, serverNokRate) {
-            serverOkGauge.data.datasets[0].value = serverOkRate;
+            const clampedRate = Math.min(serverOkRate, gaugeConfig.maxValue);
+            
+            serverOkGauge.data.datasets[0].value = clampedRate;
+            serverOkGauge.options.valueLabel.formatter = function() {
+                return Math.round(serverOkRate);
+            };
+
             serverOkGauge.update();
         }
     </script>
@@ -754,7 +760,7 @@
                     for (const [k, v] of Object.entries(status)) {
                         const el = document.getElementById(k)
                         if ( el != null ) {
-                            el.innerHTML = v
+                            updateSpanValue(el, v)
                         }
                     }
 
