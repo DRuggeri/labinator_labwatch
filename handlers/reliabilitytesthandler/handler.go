@@ -50,37 +50,47 @@ type ReliabilityTestStatus struct {
 }
 
 type ReliabilityTestHandler struct {
-	log               *slog.Logger
-	config            *Config
-	clients           map[string]chan<- ReliabilityTestStatus
-	clientsMutex      sync.Mutex
-	status            ReliabilityTestStatus
-	statusMutex       sync.RWMutex
-	upgrader          websocket.Upgrader
-	httpClient        *http.Client
-	testCtx           context.Context    // Overall test lifecycle context
-	testCancel        context.CancelFunc // Cancel function for stopping tests
-	currentTestCtx    context.Context    // Context for current test iteration
-	currentTestCancel context.CancelFunc // Cancel function for current test completion
-	stepTimeoutCancel context.CancelFunc // Cancel function for current step timeout
-	abortSteps        map[string]bool
+	log                          *slog.Logger
+	config                       *Config
+	clients                      map[string]chan<- ReliabilityTestStatus
+	clientsMutex                 sync.Mutex
+	status                       ReliabilityTestStatus
+	statusMutex                  sync.RWMutex
+	upgrader                     websocket.Upgrader
+	httpClient                   *http.Client
+	testCtx                      context.Context    // Overall test lifecycle context
+	testCancel                   context.CancelFunc // Cancel function for stopping tests
+	currentTestCtx               context.Context    // Context for current test iteration
+	currentTestCancel            context.CancelFunc // Cancel function for current test completion
+	stepTimeoutCancel            context.CancelFunc // Cancel function for current step timeout
+	abortSteps                   map[string]bool
+	abortOnAnyFailure            bool // Default from config
+	currentTestAbortOnAnyFailure bool // Override for current test run
 }
 
 func NewReliabilityTestHandler(config *Config, log *slog.Logger) (*ReliabilityTestHandler, error) {
 	abortStepsMap := make(map[string]bool)
+	abortOnAnyFailure := false
+
 	for _, step := range config.AbortSteps {
 		step = strings.TrimSpace(step)
 		if step != "" {
-			abortStepsMap[step] = true
+			if step == "all" {
+				abortOnAnyFailure = true
+			} else {
+				abortStepsMap[step] = true
+			}
 		}
 	}
 
 	handler := &ReliabilityTestHandler{
-		log:        log.With("component", "reliabilityTestHandler"),
-		config:     config,
-		clients:    make(map[string]chan<- ReliabilityTestStatus),
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		abortSteps: abortStepsMap,
+		log:                          log.With("component", "reliabilityTestHandler"),
+		config:                       config,
+		clients:                      make(map[string]chan<- ReliabilityTestStatus),
+		httpClient:                   &http.Client{Timeout: 30 * time.Second},
+		abortSteps:                   abortStepsMap,
+		abortOnAnyFailure:            abortOnAnyFailure,
+		currentTestAbortOnAnyFailure: abortOnAnyFailure, // Initialize to default
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -196,10 +206,13 @@ func (h *ReliabilityTestHandler) broadcastStatus() {
 	}
 }
 
-func (h *ReliabilityTestHandler) startTest() error {
+func (h *ReliabilityTestHandler) startTest(abortOnFailureOverride bool) error {
 	if h.testCtx != nil && h.testCtx.Err() == nil {
 		return fmt.Errorf("reliability test is already running")
 	}
+
+	h.currentTestAbortOnAnyFailure = abortOnFailureOverride
+	h.log.Info("starting reliability test", "abortOnAnyFailure", h.currentTestAbortOnAnyFailure)
 
 	// Create new context for this test run
 	h.testCtx, h.testCancel = context.WithCancel(context.Background())
@@ -208,7 +221,6 @@ func (h *ReliabilityTestHandler) startTest() error {
 	h.status.IsRunning = true
 	h.statusMutex.Unlock()
 
-	h.log.Info("starting reliability test")
 	h.broadcastStatus()
 
 	go func() {
@@ -431,10 +443,10 @@ func (h *ReliabilityTestHandler) handleStepFailure(step string, timedOut bool) {
 	}
 
 	// Check if this step should trigger abort
-	shouldAbort := h.abortSteps[step]
+	shouldAbort := h.abortSteps[step] || h.currentTestAbortOnAnyFailure
 	h.statusMutex.Unlock()
 
-	h.log.Debug("step failure handling", "step", step, "shouldAbort", shouldAbort)
+	h.log.Debug("step failure handling", "step", step, "shouldAbort", shouldAbort, "currentTestAbortOnAnyFailure", h.currentTestAbortOnAnyFailure)
 
 	if shouldAbort {
 		h.log.Warn("aborting test due to failure on critical step", "step", step, "timedOut", timedOut)
@@ -484,7 +496,12 @@ func (h *ReliabilityTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	if action != "" {
 		switch action {
 		case "start":
-			if err := h.startTest(); err != nil {
+			abortOnFailureOverride := false
+			if r.URL.Query().Get("abortOnFailure") == "true" {
+				abortOnFailureOverride = true
+			}
+
+			if err := h.startTest(abortOnFailureOverride); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -520,7 +537,7 @@ func (h *ReliabilityTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// Handle WebSocket upgrade
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		h.log.Info("websocket upgrade failed", "error", err.Error())
+		h.log.Warn("websocket upgrade failed", "error", err.Error())
 		return
 	}
 	defer conn.Close()

@@ -104,6 +104,7 @@
     <h1>
         Reliability Test 
         <a href="#" id="startStopButton" class="start-stop-button stopped" onclick="toggleTest()">Start Test</a>
+        <a href="#" id="startRunButton" class="start-stop-button stopped" onclick="toggleRun()">Start Run</a>
     </h1>
     <img class="logo" src="/assets/logo-white.svg" />
 
@@ -169,7 +170,8 @@
         let socket;
         let receivedEvents = 0;
         let isTestRunning = false;
-        let latestData = null; // Store latest data for live duration updates
+        let isRunMode = false;
+        let latestData = null;
 
         function connectSocket() {
             socket = new WebSocket('ws://localhost:8080/reliabilitytest');
@@ -272,13 +274,19 @@
         }
 
         function updateStartStopButton() {
-            const button = document.getElementById('startStopButton');
+            const testButton = document.getElementById('startStopButton');
+            const runButton = document.getElementById('startRunButton');
+            
             if (isTestRunning) {
-                button.textContent = 'Stop Test';
-                button.className = 'start-stop-button running';
+                testButton.textContent = 'Stop Test';
+                testButton.className = 'start-stop-button running';
+                runButton.textContent = 'Stop Run';
+                runButton.className = 'start-stop-button running';
             } else {
-                button.textContent = 'Start Test';
-                button.className = 'start-stop-button stopped';
+                testButton.textContent = 'Start Test';
+                testButton.className = 'start-stop-button stopped';
+                runButton.textContent = 'Start Run';
+                runButton.className = 'start-stop-button stopped';
             }
         }
 
@@ -442,6 +450,30 @@
             })
             .catch(error => {
                 console.error('Error toggling test:', error);
+            });
+        }
+
+        function toggleRun() {
+            const action = isTestRunning ? 'stop' : 'start';
+            let url = `/reliabilitytest?action=${action}`;
+            
+            if (action === 'start') {
+                url += '&abortOnFailure=true';
+                isRunMode = true;
+            } else {
+                isRunMode = false;
+            }
+            
+            fetch(url, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    console.error('Failed to', action, 'run:', response.statusText);
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling run:', error);
             });
         }
 
