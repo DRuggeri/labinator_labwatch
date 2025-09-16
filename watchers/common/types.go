@@ -23,11 +23,12 @@ type LabStatus struct {
 
 // LogEvent represents a single log event from any watcher type.
 type LogEvent struct {
-	Node       string            // The node/host that generated the log
-	Service    string            // The service that generated the log
-	Level      string            // The log level (info, warn, error, etc.)
-	Message    string            // The main log message content
-	Attributes map[string]string // Additional attributes and metadata
+	Node        string            // The node/host that generated the log
+	Service     string            // The service that generated the log
+	Level       string            // The log level (info, warn, error, etc.)
+	Message     string            // The main log message content
+	Attributes  map[string]string // Additional attributes and metadata
+	Interesting bool
 }
 
 // LogStats contains statistical information about processed log events.
@@ -71,4 +72,100 @@ type LogStats struct {
 	// PXE boot statistics
 	NumPhysicalPXEBoots int
 	NumVirtualPXEBoots  int
+
+	DHCPServed   map[string]int // Map of DHCP offers made (keyed by IP address)
+	ChainServed  map[string]int // Map of hits for the IPXE chain boot file
+	IPXEServed   map[string]int // Map of hits for per-machine IPXE file
+	AssetsServed map[string]int // Map of hits for assets
+}
+
+func NewLogStats() *LogStats {
+	return &LogStats{
+		DHCPServed:   make(map[string]int),
+		ChainServed:  make(map[string]int),
+		IPXEServed:   make(map[string]int),
+		AssetsServed: make(map[string]int),
+	}
+}
+
+func (stats *LogStats) Add(s LogStats) {
+	// Increment all scalar fields
+	stats.NumMessages += s.NumMessages
+
+	stats.NumEmergencyMessages += s.NumEmergencyMessages
+	stats.NumAlertMessages += s.NumAlertMessages
+	stats.NumCriticalMessages += s.NumCriticalMessages
+	stats.NumErrorMessages += s.NumErrorMessages
+	stats.NumWarnMessages += s.NumWarnMessages
+	stats.NumNoticeMessages += s.NumNoticeMessages
+	stats.NumInfoMessages += s.NumInfoMessages
+	stats.NumDebugMessages += s.NumDebugMessages
+
+	stats.NumDHCPDiscover += s.NumDHCPDiscover
+	stats.NumDHCPLeased += s.NumDHCPLeased
+
+	stats.NumDNSQueries += s.NumDNSQueries
+	stats.NumDNSLocal += s.NumDNSLocal
+	stats.NumDNSRecursions += s.NumDNSRecursions
+	stats.NumDNSCached += s.NumDNSCached
+
+	stats.NumCertChecks += s.NumCertChecks
+	stats.NumCertOK += s.NumCertOK
+	stats.NumCertSigned += s.NumCertSigned
+	stats.NumCertRenewed += s.NumCertRenewed
+
+	stats.NumFirewallWanInDrops += s.NumFirewallWanInDrops
+	stats.NumFirewallWanOutDrops += s.NumFirewallWanOutDrops
+	stats.NumFirewallWanDrops += s.NumFirewallWanDrops
+	stats.NumFirewallLanInDrops += s.NumFirewallLanInDrops
+	stats.NumFirewallLanOutDrops += s.NumFirewallLanOutDrops
+	stats.NumFirewallLanDrops += s.NumFirewallLanDrops
+
+	stats.NumPhysicalPXEBoots += s.NumPhysicalPXEBoots
+	stats.NumVirtualPXEBoots += s.NumVirtualPXEBoots
+
+	for key, count := range s.DHCPServed {
+		stats.DHCPServed[key] += count
+	}
+	for key, count := range s.ChainServed {
+		stats.ChainServed[key] += count
+	}
+	for key, count := range s.IPXEServed {
+		stats.IPXEServed[key] += count
+	}
+	for key, count := range s.AssetsServed {
+		stats.AssetsServed[key] += count
+	}
+}
+
+func (stats *LogStats) Copy() LogStats {
+	copy := *stats // Copy all scalar fields
+
+	// Deep copy the maps
+	if stats.DHCPServed != nil {
+		copy.DHCPServed = make(map[string]int, len(stats.DHCPServed))
+		for key, value := range stats.DHCPServed {
+			copy.DHCPServed[key] = value
+		}
+	}
+	if stats.ChainServed != nil {
+		copy.ChainServed = make(map[string]int, len(stats.ChainServed))
+		for key, value := range stats.ChainServed {
+			copy.ChainServed[key] = value
+		}
+	}
+	if stats.IPXEServed != nil {
+		copy.IPXEServed = make(map[string]int, len(stats.IPXEServed))
+		for key, value := range stats.IPXEServed {
+			copy.IPXEServed[key] = value
+		}
+	}
+	if stats.AssetsServed != nil {
+		copy.AssetsServed = make(map[string]int, len(stats.AssetsServed))
+		for key, value := range stats.AssetsServed {
+			copy.AssetsServed[key] = value
+		}
+	}
+
+	return copy
 }

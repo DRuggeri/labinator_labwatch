@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DRuggeri/labwatch/watchers/common"
@@ -26,7 +27,8 @@ type OtelFileWatcher struct {
 	trace            bool
 	internalLogChan  chan common.LogEvent
 	internalStatChan chan common.LogStats
-	stats            common.LogStats
+	stats            *common.LogStats
+	statsMutex       sync.RWMutex
 	log              *slog.Logger
 	currentFile      *os.File
 	reader           *bufio.Reader
@@ -45,6 +47,7 @@ func NewOtelFileWatcher(ctx context.Context, path string, trace bool, log *slog.
 		internalLogChan:  make(chan common.LogEvent),
 		internalStatChan: make(chan common.LogStats),
 		log:              log.With("operation", "OtelFileWatcher"),
+		stats:            common.NewLogStats(),
 	}, nil
 }
 
@@ -207,15 +210,18 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 
 			if line != "" {
 				w.log.Debug("read line", "length", len(line))
-				events := w.normalizeEvents([]byte(line))
+				events, stats := w.normalizeEvents([]byte(line))
 				w.log.Debug("normalized events", "count", len(events))
 
 				if len(events) > 0 {
 					for _, e := range events {
 						w.internalLogChan <- e
 					}
-					w.updateStats(events)
-					w.internalStatChan <- w.stats
+					w.updateStats(stats)
+
+					// Create a deep copy of stats before sending to avoid concurrent access
+					statsCopy := w.getStatsCopy()
+					w.internalStatChan <- statsCopy
 				}
 			}
 		}
@@ -282,81 +288,17 @@ func (w *OtelFileWatcher) Watch(controlContext context.Context, eventChan chan<-
 	}
 }
 
-func (w *OtelFileWatcher) updateStats(events []common.LogEvent) {
-	for _, e := range events {
-		w.stats.NumMessages++
+func (w *OtelFileWatcher) updateStats(stats common.LogStats) {
+	w.statsMutex.Lock()
+	defer w.statsMutex.Unlock()
 
-		switch e.Level {
-		case "emergency", "fatal":
-			w.stats.NumEmergencyMessages++
-		case "alert":
-			w.stats.NumAlertMessages++
-		case "critical", "crit":
-			w.stats.NumCriticalMessages++
-		case "error", "err":
-			w.stats.NumErrorMessages++
-		case "warning", "warn":
-			w.stats.NumWarnMessages++
-		case "notice":
-			w.stats.NumNoticeMessages++
-		case "info":
-			w.stats.NumInfoMessages++
-		case "debug":
-			w.stats.NumDebugMessages++
-		default:
-			w.stats.NumInfoMessages++
-		}
+	w.stats.Add(stats)
+}
 
-		if e.Service == "dnsmasq.service" || e.Service == "dnsmasq" {
-			if strings.HasPrefix(e.Message, "dnsmasq-dhcp:") {
-				if strings.Contains(e.Message, "DHCPDISCOVER") {
-					w.stats.NumDHCPDiscover++
-				} else if strings.Contains(e.Message, "DHCPOFFER") {
-					w.stats.NumDHCPLeased++
-				}
-			} else if strings.HasPrefix(e.Message, "query") {
-				w.stats.NumDNSQueries++
-			} else if strings.HasPrefix(e.Message, "dnsmasq: config") {
-				w.stats.NumDNSLocal++
-			} else if strings.HasPrefix(e.Message, "forwarded") {
-				w.stats.NumDNSRecursions++
-			} else if strings.HasPrefix(e.Message, "cached") {
-				w.stats.NumDNSCached++
-			}
+// getStatsCopy creates a deep copy of LogStats for safe JSON marshaling
+func (w *OtelFileWatcher) getStatsCopy() common.LogStats {
+	w.statsMutex.RLock()
+	defer w.statsMutex.RUnlock()
 
-		} else if e.Node == "wally" && e.Service == "kernel" {
-			if strings.Contains(e.Message, "drop wan in") {
-				w.stats.NumFirewallWanInDrops++
-				w.stats.NumFirewallWanDrops++
-			} else if strings.Contains(e.Message, "drop wan out") {
-				w.stats.NumFirewallWanOutDrops++
-				w.stats.NumFirewallWanDrops++
-			} else if strings.Contains(e.Message, "drop lan in") {
-				w.stats.NumFirewallLanInDrops++
-				w.stats.NumFirewallLanDrops++
-			} else if strings.Contains(e.Message, "drop lan out") {
-				w.stats.NumFirewallLanOutDrops++
-				w.stats.NumFirewallLanDrops++
-			}
-
-		} else if strings.HasPrefix(e.Message, "Starting cert-renewer") {
-			w.stats.NumCertChecks++
-		} else if e.Message == "certificate does not need renewal" {
-			w.stats.NumCertOK++
-		} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/sign") && strings.Contains(e.Message, "status=201") {
-			w.stats.NumCertSigned++
-		} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/renew") && strings.Contains(e.Message, "status=201") {
-			w.stats.NumCertRenewed++
-		}
-
-		if e.Service == "apache2" {
-			if uri, ok := e.Attributes["uri"]; ok {
-				if strings.Contains(uri, "/nodes-ipxe/lab/16") {
-					w.stats.NumPhysicalPXEBoots++
-				} else if strings.Contains(uri, "/nodes-ipxe/lab/de") {
-					w.stats.NumVirtualPXEBoots++
-				}
-			}
-		}
-	}
+	return w.stats.Copy()
 }

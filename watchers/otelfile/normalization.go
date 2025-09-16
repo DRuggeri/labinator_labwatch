@@ -131,8 +131,14 @@ type kvlistValue struct {
 	Values []keyValue `json:"values"`
 }
 
-func (w *OtelFileWatcher) normalizeEvents(m []byte) []common.LogEvent {
+func (w *OtelFileWatcher) normalizeEvents(m []byte) ([]common.LogEvent, common.LogStats) {
 	ret := []common.LogEvent{}
+	stats := common.LogStats{
+		DHCPServed:   make(map[string]int),
+		ChainServed:  make(map[string]int),
+		IPXEServed:   make(map[string]int),
+		AssetsServed: make(map[string]int),
+	}
 
 	// Parse OTLP format JSON line
 	logsData := otlpLogsData{}
@@ -140,7 +146,7 @@ func (w *OtelFileWatcher) normalizeEvents(m []byte) []common.LogEvent {
 	if err != nil {
 		// Debug because it happens often with partial lines
 		w.log.Debug("error unmarshalling OTLP log record", "error", err, "received", string(m))
-		return ret
+		return ret, stats
 	}
 
 	// Process each resource log
@@ -201,12 +207,117 @@ func (w *OtelFileWatcher) normalizeEvents(m []byte) []common.LogEvent {
 					w.log.Debug("trace", "payload", string(v))
 				}
 
+				/*
+				   Update stats based on event content
+				*/
+				stats.NumMessages++
+
+				switch e.Level {
+				case "emergency", "fatal":
+					stats.NumEmergencyMessages++
+				case "alert":
+					stats.NumAlertMessages++
+				case "critical", "crit":
+					stats.NumCriticalMessages++
+				case "error", "err":
+					stats.NumErrorMessages++
+				case "warning", "warn":
+					stats.NumWarnMessages++
+				case "notice":
+					stats.NumNoticeMessages++
+				case "info":
+					stats.NumInfoMessages++
+				case "debug":
+					stats.NumDebugMessages++
+				default:
+					stats.NumInfoMessages++
+				}
+
+				if e.Service == "dnsmasq.service" || e.Service == "dnsmasq" {
+					if strings.HasPrefix(e.Message, "dnsmasq-dhcp:") {
+						if strings.Contains(e.Message, "DHCPDISCOVER") {
+							stats.NumDHCPDiscover++
+							e.Interesting = true
+						} else if strings.Contains(e.Message, "DHCPOFFER") {
+							parts := strings.Split(e.Message, " ")
+							addr := parts[3]
+							stats.NumDHCPLeased++
+							stats.DHCPServed[addr]++
+							e.Interesting = true
+						}
+					} else if strings.HasPrefix(e.Message, "query") {
+						stats.NumDNSQueries++
+						e.Interesting = true
+					} else if strings.HasPrefix(e.Message, "dnsmasq: config") {
+						stats.NumDNSLocal++
+						e.Interesting = true
+					} else if strings.HasPrefix(e.Message, "forwarded") {
+						stats.NumDNSRecursions++
+						e.Interesting = true
+					} else if strings.HasPrefix(e.Message, "cached") {
+						stats.NumDNSCached++
+						e.Interesting = true
+					}
+
+				} else if e.Node == "wally" && e.Service == "kernel" {
+					if strings.Contains(e.Message, "drop wan in") {
+						stats.NumFirewallWanInDrops++
+						stats.NumFirewallWanDrops++
+						e.Interesting = true
+					} else if strings.Contains(e.Message, "drop wan out") {
+						stats.NumFirewallWanOutDrops++
+						stats.NumFirewallWanDrops++
+						e.Interesting = true
+					} else if strings.Contains(e.Message, "drop lan in") {
+						stats.NumFirewallLanInDrops++
+						stats.NumFirewallLanDrops++
+						e.Interesting = true
+					} else if strings.Contains(e.Message, "drop lan out") {
+						stats.NumFirewallLanOutDrops++
+						stats.NumFirewallLanDrops++
+						e.Interesting = true
+					}
+
+				} else if strings.HasPrefix(e.Message, "Starting cert-renewer") {
+					stats.NumCertChecks++
+					e.Interesting = true
+				} else if e.Message == "certificate does not need renewal" {
+					stats.NumCertOK++
+					e.Interesting = true
+				} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/sign") && strings.Contains(e.Message, "status=201") {
+					stats.NumCertSigned++
+					e.Interesting = true
+				} else if e.Service == "step-ca.service" && strings.Contains(e.Message, "path=/renew") && strings.Contains(e.Message, "status=201") {
+					stats.NumCertRenewed++
+					e.Interesting = true
+				}
+
+				if e.Service == "apache2" {
+					if uri, ok := e.Attributes["uri"]; ok {
+						if uri == "/chain-boot.ipxe" {
+							stats.ChainServed[e.Attributes["remote"]]++
+							e.Interesting = true
+						} else if strings.Contains(uri, "/nodes-ipxe/lab/16") {
+							stats.NumPhysicalPXEBoots++
+							stats.IPXEServed[e.Attributes["remote"]]++
+							e.Interesting = true
+						} else if strings.Contains(uri, "/nodes-ipxe/lab/de") {
+							stats.NumVirtualPXEBoots++
+							stats.IPXEServed[e.Attributes["remote"]]++
+							e.Interesting = true
+						} else if strings.Contains(uri, "/assets/") {
+							stats.AssetsServed[e.Attributes["remote"]]++
+							e.Interesting = true
+						}
+					}
+				}
+
 				ret = append(ret, e)
 			}
 		}
 	}
 
-	return ret
+	return ret, stats
 }
 
 // Helper function to extract string value from anyValue
