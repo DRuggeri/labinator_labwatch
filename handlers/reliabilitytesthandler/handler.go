@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,8 @@ type Config struct {
 	TestInterval int            `yaml:"testInterval"` // seconds between tests
 	Timeouts     map[string]int `yaml:"timeouts"`     // timeouts per step in seconds
 	AbortSteps   []string       `yaml:"abortSteps"`   // steps that cause shutdown on failure/timeout
+	PreCommand   string         `yaml:"preCommand"`   // command to execute before each test
+	PostCommand  string         `yaml:"postCommand"`  // command to execute after each test
 }
 
 type StepTiming struct {
@@ -268,6 +271,13 @@ func (h *ReliabilityTestHandler) runTest() error {
 
 	h.log.Info("starting new test iteration")
 
+	// Execute pre-command if configured
+	if h.config.PreCommand != "" {
+		if err := h.executeCommand(h.config.PreCommand, "pre-command"); err != nil {
+			h.log.Error("pre-command failed", "error", err, "command", h.config.PreCommand)
+		}
+	}
+
 	if err := h.startLab(); err != nil {
 		return fmt.Errorf("failed to start lab: %w", err)
 	}
@@ -281,8 +291,39 @@ func (h *ReliabilityTestHandler) runTest() error {
 		return nil
 	case <-h.currentTestCtx.Done():
 		// This individual test iteration completed (success or failure)
+		if h.config.PostCommand != "" {
+			if err := h.executeCommand(h.config.PostCommand, "post-command"); err != nil {
+				h.log.Error("post-command failed", "error", err, "command", h.config.PostCommand)
+			}
+		}
 		return nil
 	}
+}
+
+// executeCommand executes a shell command with timeout
+func (h *ReliabilityTestHandler) executeCommand(command, commandType string) error {
+	h.log.Debug("executing command", "type", commandType, "command", command)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		h.log.Error("command execution failed",
+			"type", commandType,
+			"command", command,
+			"error", err,
+			"output", string(output))
+		return err
+	}
+
+	h.log.Debug("command executed successfully",
+		"type", commandType,
+		"command", command,
+		"output", string(output))
+	return nil
 }
 
 func (h *ReliabilityTestHandler) startLab() error {

@@ -1,0 +1,100 @@
+# Labwatch Configuration File
+# This is a comprehensive example configuration file for the labwatch application.
+# All settings shown here include their default values and descriptions.
+
+# Loki (logging aggregation) configuration
+# Address of the Loki instance for log aggregation
+loki-address: "boss.local:3100"
+
+# LogQL query for retrieving logs from Loki
+loki-query: '{ host_name =~ ".+" } | json'
+
+# Local log file path for OTEL (OpenTelemetry) collector logs
+# This is used instead of Loki for log monitoring in the current implementation
+log-path: "/var/log/tmplog/otelcol.jsonl"
+
+# Enable trace-level logging for log processing
+log-trace: false
+
+# Talos (Kubernetes OS) configuration
+# Path to the Talos configuration file
+talos-config: "/home/boss/.talos/config"
+
+# Path to the Talos scenario configuration file
+talos-scenario-config: "/home/boss/talos/scenarios/configs.yaml"
+
+# Directory containing Talos scenario files
+talos-scenarios-directory: "/home/boss/talos/scenarios"
+
+# Hardware management configuration
+# Serial port for the power manager device (relay control)
+powermanager-port: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0"
+
+# Serial port for the statusinator device (status display)
+statusinator-port: "/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:3D:AE:E9:29:08-if00"
+
+# Network boot configuration
+# Directory containing iPXE configuration files for different lab setups
+netboot-folder: "/var/www/html/nodes-ipxe/"
+
+# Symbolic link name used to activate a specific lab configuration
+netboot-link: "lab"
+
+# Monitoring configuration
+# Enable trace-level logging for port monitoring
+port-watch-trace: false
+
+# Kubernetes namespace to monitor for pods (empty = all namespaces)
+pod-watch-namespace: ""
+
+# Directory for serving documentation and web assets
+doc-dir: "/var/www/html"
+
+# Reliability testing configuration
+reliability-test:
+  # Base URL for the labwatch web interface
+  baseUrl: "http://boss.local:8080"
+  
+  # Interval between reliability tests in seconds
+  testInterval: 5
+  
+  # Timeout values for each test step (in seconds)
+  # These define how long to wait for each phase of lab initialization
+  timeouts:
+    "init": 30                    # Initial setup phase
+    "secret gen": 150             # Kubernetes secret generation
+    "disk wipe": 235              # Disk wiping/preparation
+    "powerup": 60                 # Hardware power-up
+    "booting-hypervisors": 245    # Hypervisor boot process
+    "booting-nodes": 235          # Node boot process
+    "bootstrapping": 155          # Kubernetes bootstrapping
+    "finalizing": 255             # Final configuration
+    "starting": 156               # Service startup
+  
+  # Steps that should cause the test to abort on failure or timeout
+  # Available options:
+  #   - "all": abort on any step failure/timeout
+  #   - specific step names from the timeouts section above
+  abortSteps:
+    - "booting-nodes"
+    - "finalizing"
+  
+  # Optional: Command to run before each test iteration
+  # preCommand: "echo 'Starting test'"
+  
+  # Optional: Command to run after each test iteration
+  # postCommand: "echo 'Test completed'"
+
+# Example of a minimal configuration file:
+# ---
+# loki-address: "localhost:3100"
+# talos-config: "/home/user/.talos/config"
+# powermanager-port: "/dev/ttyUSB0"
+# statusinator-port: "/dev/ttyUSB1"
+# netboot-folder: "/var/www/html/nodes-ipxe/"
+# reliability-test:
+#   baseUrl: "http://localhost:8080"
+#   testInterval: 10
+#   timeouts:
+#     "init": 30
+#     "bootstrapping": 120
