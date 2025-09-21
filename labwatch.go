@@ -28,6 +28,7 @@ import (
 	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/statusinator"
+	"github.com/DRuggeri/labwatch/switchman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/common"
@@ -61,6 +62,7 @@ type LabwatchConfig struct {
 	TalosScenariosDir   string                         `yaml:"talos-scenarios-directory"`
 	PowerManagerPort    string                         `yaml:"powermanager-port"`
 	StatusinatorPort    string                         `yaml:"statusinator-port"`
+	SwitchBaseURL       string                         `yaml:"switch-base-url"`
 	NetbootFolder       string                         `yaml:"netboot-folder"`
 	NetbootLink         string                         `yaml:"netboot-link"`
 	PortWatchTrace      bool                           `yaml:"port-watch-trace"`
@@ -100,6 +102,7 @@ func main() {
 		TalosConfigFile:     "/home/boss/.talos/config",
 		PowerManagerPort:    "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
 		StatusinatorPort:    "/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:3D:AE:E9:29:08-if00",
+		SwitchBaseURL:       "http://192.168.122.2",
 		NetbootFolder:       "/var/www/html/nodes-ipxe/",
 		NetbootLink:         "lab",
 		TalosScenarioConfig: "/home/boss/talos/scenarios/configs.yaml",
@@ -155,6 +158,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	sMan, err := switchman.NewSwitchManager(cfg.SwitchBaseURL, log)
+	if err != nil {
+		log.Error("failed to create the switch manager", "error", err.Error())
+		os.Exit(1)
+	}
+
 	statinator, err := statusinator.NewStatusinator(cfg.StatusinatorPort, log)
 	if err != nil {
 		log.Error("failed to create the power manager", "error", err.Error())
@@ -195,13 +204,14 @@ func main() {
 
 	cbWatcher, _ := callbacks.NewCallbackWatcher(mainCtx, log)
 
-	watcherCancel, err := startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, nil, statusWatcher, eventReceiveHandler, log)
+	watcherCancel, err := startWatchers(mainCtx, cfg, activeLab, pMan, sMan, cbWatcher, nil, statusWatcher, eventReceiveHandler, log)
 	if err != nil {
 		log.Error("failed to start watchers", "error", err.Error())
 		os.Exit(1)
 	}
 
 	http.Handle("/power", pMan)
+	http.Handle("/switch", sMan)
 	http.Handle("/callbacks", cbWatcher)
 
 	reliabilityHandler, err := reliabilitytesthandler.NewReliabilityTestHandler(cfg.ReliabilityTest, log)
@@ -230,7 +240,7 @@ func main() {
 		cbWatcher.Reset()
 		statusWatcher.ResetStatus()
 		loadWatcher.Reset()
-		watcherCancel, err = startWatchers(mainCtx, cfg, activeLab, pMan, cbWatcher, initializer, statusWatcher, eventReceiveHandler, log)
+		watcherCancel, err = startWatchers(mainCtx, cfg, activeLab, pMan, sMan, cbWatcher, initializer, statusWatcher, eventReceiveHandler, log)
 		if err != nil {
 			log.Error("failed to restart watchers", "error", err.Error())
 			os.Exit(1)
@@ -330,6 +340,17 @@ func main() {
 			time.Sleep(time.Millisecond * 100)
 		}
 
+		// ... and network is up
+		sMan.TurnOn(switchman.NODES_SWITCH_PORTS...)
+		for _, port := range switchman.NODES_SWITCH_PORTS {
+			for {
+				if sMan.PortIsOn(port) {
+					break
+				}
+				time.Sleep(time.Millisecond * 100)
+			}
+		}
+
 		resetWatchers()
 
 		// Reset the initialization state and inform clients
@@ -368,6 +389,7 @@ func main() {
 		pMan.TurnOff(powerman.P4)
 		pMan.TurnOff(powerman.P5)
 		pMan.TurnOff(powerman.P6)
+		sMan.TurnOn(switchman.SPALL)
 
 		// Do the needy to this box
 		out, err := exec.Command(args[0], args[1:]...).Output()
@@ -510,7 +532,7 @@ func main() {
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
-func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, cbWatcher *callbacks.CallbackWatcher, initializer *talosinitializer.TalosInitializer, statusReceiveHandler *statushandler.StatusWatcher, eventReceiveHandler *eventhandler.EventReceiveHandler, log *slog.Logger) (context.CancelFunc, error) {
+func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *powerman.PowerManager, sMan *switchman.SwitchManager, cbWatcher *callbacks.CallbackWatcher, initializer *talosinitializer.TalosInitializer, statusReceiveHandler *statushandler.StatusWatcher, eventReceiveHandler *eventhandler.EventReceiveHandler, log *slog.Logger) (context.CancelFunc, error) {
 	log = log.With("operation", "startWatchers")
 
 	var err error
@@ -562,6 +584,9 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 
 	pInfo := make(chan powerman.PowerStatus)
 	go pMan.Watch(ctx, pInfo)
+
+	sInfo := make(chan switchman.SwitchStatus)
+	go sMan.Watch(ctx, sInfo)
 
 	portWatcher, err := port.NewPortWatcher(ctx, endpoints, cfg.PortWatchTrace, log)
 	if err != nil {
@@ -658,6 +683,14 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading power status")
+				}
+			case s, ok := <-sInfo:
+				if ok {
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.Switch = s
+					broadcastStatusUpdate = true
+				} else {
+					log.Error("error encountered reading switch status")
 				}
 			case k, ok := <-kubeInfo:
 				if ok {

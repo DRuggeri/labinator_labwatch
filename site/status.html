@@ -65,6 +65,17 @@
         <span class="powerLabel">P7</span>:<span id="P7">0</span>
         <span class="powerLabel">P8</span>:<span id="P8">0</span>
     </div>
+    <div id="switch">
+        <h3>Switch</h3>
+        <span class="switchLabel">Wally</span>:<span id="Port8">0</span>
+        <span class="switchLabel">Boss</span>:<span id="Port7">0</span>
+        <span class="switchLabel">N1</span>:<span id="Port6">0</span>
+        <span class="switchLabel">N2</span>:<span id="Port5">0</span>
+        <span class="switchLabel">N3</span>:<span id="Port4">0</span>
+        <span class="switchLabel">N4</span>:<span id="Port3">0</span>
+        <span class="switchLabel">N5</span>:<span id="Port1">0</span>
+        <span class="switchLabel">N6</span>:<span id="Port2">0</span>
+    </div>
 
     <div id="network">
         <h3>Network</h3>
@@ -184,6 +195,18 @@
                             } else {
                                 el.innerHTML = "Off"
                                 el.className = "powerOf"
+                            }
+                        }
+                    }
+                    for (const [k, v] of Object.entries(data['switch'])) {
+                        const el = document.getElementById(k)
+                        if ( el != null ) {
+                            if ( v ) {
+                                el.innerHTML = "On"
+                                el.className = "switchOn"
+                            } else {
+                                el.innerHTML = "Off"
+                                el.className = "switchOff"
                             }
                         }
                     }

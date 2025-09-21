@@ -320,6 +320,7 @@
 
 				<section id="chaos" data-name="Chaos">
 					<a href="#/scale-load">Change the Load</a><br />
+					<a href="#/switch-net">Tweak the Network</a><br />
 					<a href="#/kill-box">Kill a Box</a><br />
 					<a href="#/restart-box">Restart a Box</a><br />
 					<!--
@@ -333,6 +334,37 @@
 					<br />
 					Add <a onclick="sendThenSlide('/scale?load=server&operation=add&number=1', 'chaos');">1 server</a> - <a onclick="sendThenSlide('/scale?load=server&operation=add&number=3', 'chaos');">3 servers</a><br />
 					Kill <a onclick="sendThenSlide('/scale?load=server&operation=sub&number=1', 'chaos');">1 server</a> - <a onclick="sendThenSlide('/scale?load=server&operation=sub&number=3', 'chaos');">3 servers</a><br />
+				</section>
+				<section id="switch-net">
+					Node<br />
+					Enable: 
+					  <a onclick="sendThenSlide('/switch?action=enable&port=p6', 'chaos');">1</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=p5', 'chaos');">2</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=p4', 'chaos');">3</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=p3', 'chaos');">4</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=p1', 'chaos');">5</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=p2', 'chaos');">6</a>
+					  <br />
+					Disable: 
+					  <a onclick="sendThenSlide('/switch?action=disable&port=p6', 'chaos');">1</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=p5', 'chaos');">2</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=p4', 'chaos');">3</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=p3', 'chaos');">4</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=p1', 'chaos');">5</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=p2', 'chaos');">6</a>
+					  <br />
+					<br />
+					Group<br />
+					Enable:&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=group1', 'chaos');">AZ1</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=group2', 'chaos');">AZ2</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=enable&port=group3', 'chaos');">AZ3</a>
+					  <br />
+					Disable:&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=group1', 'chaos');">AZ1</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=group2', 'chaos');">AZ2</a>&nbsp;
+					  <a onclick="sendThenSlide('/switch?action=disable&port=group3', 'chaos');">AZ3</a>
+					  <br />
 				</section>
 				<section id="kill-box">
 					<a onclick="sendThenSlide('/power?action=turnoff&port=p1', 'chaos');">Kill Box 1</a><br />

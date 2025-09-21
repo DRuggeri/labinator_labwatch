@@ -3,6 +3,7 @@ package common
 
 import (
 	"github.com/DRuggeri/labwatch/powerman"
+	"github.com/DRuggeri/labwatch/switchman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/kubernetes"
@@ -16,6 +17,7 @@ type LabStatus struct {
 	Kubernetes  map[string]kubernetes.PodStatus    `json:"kubernetes"`
 	Talos       map[string]talos.NodeStatus        `json:"talos"`
 	Power       powerman.PowerStatus               `json:"power"`
+	Switch      switchman.SwitchStatus             `json:"switch"`
 	Ports       port.PortStatus                    `json:"ports"`
 	Callbacks   callbacks.CallbackStatus           `json:"callbacks"`
 	Logs        LogStats                           `json:"logs"`
