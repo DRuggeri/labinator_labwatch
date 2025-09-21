@@ -31,14 +31,22 @@
             margin: 10px;
             padding: 10px;
         }
-        div.node {
-            filter: brightness(50%);
-        }
         div.virtual {
             background-color: #444444;
             margin: 5px;
             padding: 5px;
             border: 1px solid #888888;
+        }
+        div.node.down {
+            filter: brightness(50%);
+        }
+        div.node.booting {
+            filter: brightness(75%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            animation: borderFade 1.5s infinite alternate;
+        }
+        div.node.booted {
+            filter: brightness(100%);
         }
         [data-highlight-changes] span, span[data-highlight-changes] {
             position: relative;
@@ -61,12 +69,36 @@
         span.type {
             font-size: .7em;
         }
+
         span.number {
             text-align: center;
             vertical-align: middle;
             display: inline-block;
             padding: 3px;
             min-width: 1em;
+        }
+        div.down > span.number, div.booting > span.number {
+            display: none;
+        }
+        div.booted > span.number {
+            display: inline-block;
+        }
+
+        span.boot-state {
+            margin-left: 5px;
+        }
+        div.down > span.boot-state, div.booting > span.boot-state {
+            display: inline;
+        }
+        div.booted > span.boot-state {
+            display: none;
+        }
+
+        span.booting-wait {
+            opacity: 0.25;
+        }
+        span.booting-done {
+            opacity: 1;
         }
         span.ok {
             background-color: green;
@@ -157,6 +189,14 @@
             }
             100% {
                 opacity: 0.6;
+            }
+        }
+        @keyframes borderFade {
+            0% {
+                border-color: rgba(255, 255, 255, 0.5);
+            }
+            100% {
+                border-color: rgb(217, 255, 0);
             }
         }
     </style>
@@ -340,6 +380,7 @@
         var lastStatus = {}
         var statusContainers = {}
         var labNodes = {}
+        var lastBootState = {}
         var lastNodeState = {}
         
         // Cache elements that get updated frequently via WebSocket messages
@@ -482,20 +523,87 @@
             }
         }
 
-        function updateNodeStatus(ports) {
+        function updateNodeStatus(ports, loginfo) {
             if (ports == null ) return
+            if (loginfo == null ) return
 
-            for (const [combo, up] of Object.entries(ports)) {
-                if (lastNodeState[combo] != up) {
-                    const [ip, port] = combo.split(':')
-                    console.log('node %s changed state %s', ip, up)
-                    el = ip2NodeElement[ip]
-                    if (el != null) {
-                        el.style.filter = up ? 'brightness(100%)' : 'brightness(50%)'
+            thisNodeState = {}
+
+            for (const [combo, nodeUp] of Object.entries(ports)) {
+                const [ip, port] = combo.split(':')
+                thisNodeState[ip] = nodeUp
+                nodeEl = ip2NodeElement[ip]
+
+                if (nodeEl == null) continue
+                // Overall change in status - affects all the spans
+                if (lastNodeState[ip] != nodeUp) {
+                    console.log('node %s changed state %s', ip, nodeUp)
+           
+                    if (nodeUp) {
+                        nodeEl.classList.add('booted')
+                        nodeEl.classList.remove('booting')
+                        nodeEl.classList.remove('down')
+                    } else {
+                        nodeEl.classList.remove('booted')
+                        nodeEl.classList.remove('booting')
+                        nodeEl.classList.add('down')
+                        lastBootState[ip] = {
+                            DHCPServed: false,
+                            ChainServed: false,
+                            AssetsServed: false,
+                        }
                     }
+                } else {
+                    // Look for smaller changes in the booting nodes
+                    if (lastBootState[ip] == null) {
+                        lastBootState[ip] = {
+                            DHCPServed: false,
+                            ChainServed: false,
+                            AssetsServed: false,
+                        }
+                    }
+
+                    const states = ['DHCPServed', 'ChainServed', 'AssetsServed']
+                    states.forEach(state => {
+                        for (const [logIp, num] of Object.entries(loginfo[state])) {
+                            tmp = num > 0
+
+                            if (lastBootState[logIp] == null) {
+                                lastBootState[logIp] = {
+                                    DHCPServed: false,
+                                    ChainServed: false,
+                                    AssetsServed: false,
+                                }
+                            }
+
+                            if (!nodeUp && (
+                                    lastBootState[ip]['DHCPServed'] ||
+                                    lastBootState[ip]['ChainServed'] ||
+                                    lastBootState[ip]['AssetsServed']
+                                )) {
+                                nodeEl.classList.add('booting')
+                                nodeEl.classList.remove('down')
+                                nodeEl.classList.remove('booted')
+                            }
+
+                            if(tmp != lastBootState[logIp][state]) {
+                                el = document.getElementById(state + '-' + logIp)
+                                if (el != null) {
+                                    if (tmp) {
+                                        el.classList.remove('booting-wait')
+                                        el.classList.add('booting-done')
+                                    } else {
+                                        el.classList.remove('booting-done')
+                                        el.classList.add('booting-wait')
+                                    }
+                                }
+                                lastBootState[logIp][state] = tmp
+                            }
+                        }
+                    })
                 }
             }
-            lastNodeState = ports
+            lastNodeState = thisNodeState
         }
 
         function updateNodeContainerCounts(containers) {
@@ -724,6 +832,24 @@
                     newSpan.innerHTML = node['name']
                     newDiv.appendChild(newSpan)
 
+                    newSpan = document.createElement('span')
+                    newSpan.setAttribute('id', 'DHCPServed-' + node['ip'])
+                    newSpan.className = 'boot-state booting-wait'
+                    newSpan.innerHTML = '🌐'
+                    newDiv.appendChild(newSpan)
+
+                    newSpan = document.createElement('span')
+                    newSpan.setAttribute('id', 'ChainServed-' + node['ip'])
+                    newSpan.className = 'boot-state booting-wait'
+                    newSpan.innerHTML = '🔗'
+                    newDiv.appendChild(newSpan)
+
+                    newSpan = document.createElement('span')
+                    newSpan.setAttribute('id', 'AssetsServed-' + node['ip'])
+                    newSpan.className = 'boot-state booting-wait'
+                    newSpan.innerHTML = '🚀'
+                    newDiv.appendChild(newSpan)
+
                     /*
                     newSpan = document.createElement('span')
                     newSpan.className = 'type'
@@ -839,7 +965,7 @@
                     }
 
                     lastStatus = status
-                    updateNodeStatus(status['ports'])
+                    updateNodeStatus(status['ports'], status['logs'])
                     updateNodeContainerCounts(status['kubernetes'])
                 } catch (error) {
                     console.log("Failed parsing JSON from status server:", error)
