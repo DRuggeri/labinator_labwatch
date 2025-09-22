@@ -122,7 +122,7 @@ func (m *SwitchManager) Watch(controlContext context.Context, resultChan chan<- 
 	for m.running {
 		select {
 		case <-controlContext.Done():
-			m.log.Info("Control context cancelled - stopping watch")
+			m.log.Debug("Control context cancelled - stopping watch")
 			return
 		default:
 			time.Sleep(1 * time.Second)
