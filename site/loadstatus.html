@@ -784,7 +784,7 @@
     </script>
 
     <script>
-        fetch('/scenarios?last=true')
+        fetch('/scenarios?current=true')
         .then(response => response.json())
         .then(cfg => {
             console.log("config: %o", cfg)

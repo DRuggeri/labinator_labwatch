@@ -460,9 +460,16 @@ func main() {
 
 		var scenarioName string
 		if r.URL.Query().Get("current") == "true" {
-			activeLabMutex.Lock()
-			scenarioName = activeLab
-			activeLabMutex.Unlock()
+			// We'll default to the current running lab, but fall back
+			// to the last lab if none is currently running
+			if activeLab != "" {
+				activeLabMutex.Lock()
+				scenarioName = activeLab
+				activeLabMutex.Unlock()
+			} else {
+				scenarioName = initializer.GetLastLab()
+			}
+
 		}
 
 		if r.URL.Query().Get("last") == "true" {
