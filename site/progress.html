@@ -345,8 +345,9 @@
 			});
 
             Reveal.addEventListener('doneSlide', async function() {
-				await navigateBottomWindow('https://boss.local:3000/grafana/d/k8s_views_global/kubernetes-views-global?kiosk=true&orgId=1&from=now-1h&to=now&timezone=browser&var-datasource=prometheus&var-cluster=&var-resolution=30s&refresh=30s');
-                window.location.replace('http://boss.local:8080/index.html');
+				//await navigateBottomWindow('https://boss.local:3000/grafana/d/k8s_views_global/kubernetes-views-global?kiosk=true&orgId=1&from=now-1h&to=now&timezone=browser&var-datasource=prometheus&var-cluster=&var-resolution=30s&refresh=30s');
+                await new Promise(r => setTimeout(r, 2000));
+                window.location.replace('http://boss.local:8080/index.html#chaos');
 			});
 		</script>
 	</body>
