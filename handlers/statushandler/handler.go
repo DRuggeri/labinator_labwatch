@@ -66,9 +66,12 @@ func (h *StatusWatcher) RemoveClient(id string) {
 }
 
 func (h *StatusWatcher) UpdateStatus(status common.LabStatus) {
+	// Create a deep copy to ensure thread safety
+	safeCopy := h.safeCopyForMarshaling(status)
+
 	// Update current status
 	h.currentMutex.Lock()
-	h.currentStatus = status
+	h.currentStatus = safeCopy
 	h.currentMutex.Unlock()
 
 	h.clientsMutex.Lock()
@@ -85,7 +88,7 @@ func (h *StatusWatcher) UpdateStatus(status common.LabStatus) {
 		// Broadcast without holding the lock
 		for id, ch := range clientsCopy {
 			select {
-			case ch <- status:
+			case ch <- safeCopy:
 				// Successfully sent
 			default:
 				// Channel full, skip this client to avoid blocking
