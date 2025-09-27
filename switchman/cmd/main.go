@@ -16,7 +16,7 @@ func main() {
 	logger.Info("Exercising switchman package")
 
 	// Create the switch manager
-	sm, err := switchman.NewSwitchManager("http://192.168.122.2", logger)
+	sm, err := switchman.NewSwitchManager("http://192.168.122.2", "", "", logger)
 	if err != nil {
 		logger.Error("Failed to create switch manager", "error", err)
 		os.Exit(1)

@@ -63,6 +63,11 @@ type LabwatchConfig struct {
 	PowerManagerPort    string                         `yaml:"powermanager-port"`
 	StatusinatorPort    string                         `yaml:"statusinator-port"`
 	SwitchBaseURL       string                         `yaml:"switch-base-url"`
+	SwitchUsername      string                         `yaml:"switch-username"`
+	SwitchPassword      string                         `yaml:"switch-password"`
+	RouterBaseURL       string                         `yaml:"router-base-url"`
+	RouterUsername      string                         `yaml:"router-username"`
+	RouterPassword      string                         `yaml:"router-password"`
 	NetbootFolder       string                         `yaml:"netboot-folder"`
 	NetbootLink         string                         `yaml:"netboot-link"`
 	PortWatchTrace      bool                           `yaml:"port-watch-trace"`
@@ -102,7 +107,12 @@ func main() {
 		TalosConfigFile:     "/home/boss/.talos/config",
 		PowerManagerPort:    "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
 		StatusinatorPort:    "/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:3D:AE:E9:29:08-if00",
+		RouterBaseURL:       "https://192.168.122.1/",
+		RouterUsername:      "root",
+		RouterPassword:      "wally",
 		SwitchBaseURL:       "http://192.168.122.2",
+		SwitchUsername:      "admin",
+		SwitchPassword:      "admin",
 		NetbootFolder:       "/var/www/html/nodes-ipxe/",
 		NetbootLink:         "lab",
 		TalosScenarioConfig: "/home/boss/talos/scenarios/configs.yaml",
@@ -158,7 +168,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sMan, err := switchman.NewSwitchManager(cfg.SwitchBaseURL, log)
+	sMan, err := switchman.NewSwitchManager(cfg.SwitchBaseURL, cfg.SwitchUsername, cfg.SwitchPassword, log)
 	if err != nil {
 		log.Error("failed to create the switch manager", "error", err.Error())
 		os.Exit(1)
