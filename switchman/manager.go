@@ -62,9 +62,17 @@ type SwitchManager struct {
 	running   bool
 	cookie    string
 	cookieJar *cookiejar.Jar
+	username  string
+	password  string
 }
 
-func NewSwitchManager(baseURL string, l *slog.Logger) (*SwitchManager, error) {
+func NewSwitchManager(baseURL string, username string, password string, l *slog.Logger) (*SwitchManager, error) {
+	if username == "" {
+		username = USERNAME
+	}
+	if password == "" {
+		password = PASSWORD
+	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
@@ -81,6 +89,8 @@ func NewSwitchManager(baseURL string, l *slog.Logger) (*SwitchManager, error) {
 		log:       l.With("operation", "switchmanager"),
 		running:   true,
 		cookieJar: jar,
+		username:  username,
+		password:  password,
 	}
 
 	// Attempt to login and get initial status
@@ -140,7 +150,7 @@ func (m *SwitchManager) login() error {
 	loginURL := m.baseURL + "/login.cgi"
 
 	// Calculate MD5 hash of username + password
-	hash := md5.Sum([]byte(USERNAME + PASSWORD))
+	hash := md5.Sum([]byte(m.username + m.password))
 	response := fmt.Sprintf("%x", hash)
 
 	// Set the admin cookie
@@ -162,8 +172,8 @@ func (m *SwitchManager) login() error {
 
 	// Prepare form data
 	formData := url.Values{}
-	formData.Set("username", USERNAME)
-	formData.Set("password", PASSWORD)
+	formData.Set("username", m.username)
+	formData.Set("password", m.password)
 	formData.Set("language", "EN")
 	formData.Set("Response", response)
 

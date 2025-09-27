@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/DRuggeri/labwatch/powerman"
+	"github.com/DRuggeri/labwatch/switchman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/jacobsa/go-serial/serial"
@@ -27,6 +28,7 @@ type BriefStatus struct {
 	Initializer talosinitializer.InitializerStatus `json:"initializer"`
 	Power       powerman.PowerStatus               `json:"power"`
 	Logs        common.LogStats                    `json:"logs"`
+	Switch      switchman.SwitchStatus             `json:"switch"`
 }
 
 func NewStatusinator(port string, l *slog.Logger) (*Statusinator, error) {
@@ -82,6 +84,16 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 						P7: s.Power.P7,
 						P8: s.Power.P8,
 					},
+					Switch: switchman.SwitchStatus{
+						Port1: s.Switch.Port1,
+						Port2: s.Switch.Port2,
+						Port3: s.Switch.Port3,
+						Port4: s.Switch.Port4,
+						Port5: s.Switch.Port5,
+						Port6: s.Switch.Port6,
+						Port7: s.Switch.Port7,
+						Port8: s.Switch.Port8,
+					},
 					Logs: common.LogStats{
 						NumMessages:          s.Logs.NumMessages,
 						NumEmergencyMessages: s.Logs.NumEmergencyMessages,
@@ -120,6 +132,9 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 				if err != nil {
 					m.log.Error("failed to marshal to JSON", "error", err)
 					return
+				}
+				if len(b) > 2048 {
+					m.log.Warn("payload too large", "size", len(b))
 				}
 				m.send("status", b)
 			} else {
