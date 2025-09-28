@@ -106,6 +106,21 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 						NumDebugMessages:     s.Logs.NumDebugMessages,
 						NumDHCPDiscover:      s.Logs.NumDHCPDiscover,
 						NumDHCPLeased:        s.Logs.NumDHCPLeased,
+
+						NumDNSQueries:    s.Logs.NumDNSQueries,
+						NumDNSLocal:      s.Logs.NumDNSLocal,
+						NumDNSRecursions: s.Logs.NumDNSRecursions,
+						NumDNSCached:     s.Logs.NumDNSCached,
+
+						NumFirewallWanInDrops:  s.Logs.NumFirewallWanInDrops,
+						NumFirewallWanOutDrops: s.Logs.NumFirewallWanOutDrops,
+						NumFirewallWanDrops:    s.Logs.NumFirewallWanDrops,
+						NumFirewallLanInDrops:  s.Logs.NumFirewallLanInDrops,
+						NumFirewallLanOutDrops: s.Logs.NumFirewallLanOutDrops,
+						NumFirewallLanDrops:    s.Logs.NumFirewallLanDrops,
+
+						NumPhysicalPXEBoots: s.Logs.NumPhysicalPXEBoots,
+						NumVirtualPXEBoots:  s.Logs.NumVirtualPXEBoots,
 					},
 					Initializer: talosinitializer.InitializerStatus{
 						LabName:                s.Initializer.LabName,
@@ -117,12 +132,23 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 						InitializedPods:        s.Initializer.InitializedPods,
 						CurrentStep:            s.Initializer.CurrentStep,
 						Failed:                 s.Initializer.Failed,
-						TimeSpent:              make(map[string]int),
 					},
 				}
 
-				// Ignore the TimeSpent map
+				// Ignore the maps
 				/*
+					for k, v := range s.Logs.DHCPServed {
+						briefStatus.Logs.DHCPServed[k] = v
+					}
+					for k, v := range s.Logs.ChainServed {
+						briefStatus.Logs.ChainServed[k] = v
+					}
+					for k, v := range s.Logs.IPXEServed {
+						briefStatus.Logs.IPXEServed[k] = v
+					}
+					for k, v := range s.Logs.AssetsServed {
+						briefStatus.Logs.AssetsServed[k] = v
+					}
 					for k, v := range s.Initializer.TimeSpent {
 						briefStatus.Initializer.TimeSpent[k] = v
 					}
