@@ -33,6 +33,7 @@ import (
 	"github.com/DRuggeri/labwatch/watchers/callbacks"
 	"github.com/DRuggeri/labwatch/watchers/common"
 	"github.com/DRuggeri/labwatch/watchers/kubernetes"
+	"github.com/DRuggeri/labwatch/watchers/openwrt"
 	"github.com/DRuggeri/labwatch/watchers/otelfile"
 	"github.com/DRuggeri/labwatch/watchers/port"
 	"github.com/DRuggeri/labwatch/watchers/talos"
@@ -68,6 +69,7 @@ type LabwatchConfig struct {
 	RouterBaseURL       string                         `yaml:"router-base-url"`
 	RouterUsername      string                         `yaml:"router-username"`
 	RouterPassword      string                         `yaml:"router-password"`
+	RouterMetricsURL    string                         `yaml:"router-metrics-url"`
 	NetbootFolder       string                         `yaml:"netboot-folder"`
 	NetbootLink         string                         `yaml:"netboot-link"`
 	PortWatchTrace      bool                           `yaml:"port-watch-trace"`
@@ -110,6 +112,7 @@ func main() {
 		RouterBaseURL:       "https://192.168.122.1/",
 		RouterUsername:      "root",
 		RouterPassword:      "wally",
+		RouterMetricsURL:    "http://192.168.122.1:9100/metrics",
 		SwitchBaseURL:       "http://192.168.122.2",
 		SwitchUsername:      "admin",
 		SwitchPassword:      "admin",
@@ -605,6 +608,14 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 	sInfo := make(chan switchman.SwitchStatus)
 	go sMan.Watch(ctx, sInfo)
 
+	rWatcher, err := openwrt.NewOpenWrtWatcher(ctx, cfg.RouterMetricsURL, log)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	rInfo := make(chan openwrt.OpenWrtStatus)
+	go rWatcher.Watch(ctx, rInfo)
+
 	portWatcher, err := port.NewPortWatcher(ctx, endpoints, cfg.PortWatchTrace, log)
 	if err != nil {
 		cancel()
@@ -708,6 +719,14 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 					broadcastStatusUpdate = true
 				} else {
 					log.Error("error encountered reading switch status")
+				}
+			case r, ok := <-rInfo:
+				if ok {
+					updatedStatus = statusReceiveHandler.GetCurrentStatus()
+					updatedStatus.OpenWrt = r
+					broadcastStatusUpdate = true
+				} else {
+					log.Error("error encountered reading router statuses")
 				}
 			case k, ok := <-kubeInfo:
 				if ok {

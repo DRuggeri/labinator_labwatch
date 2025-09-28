@@ -12,6 +12,7 @@ import (
 	"github.com/DRuggeri/labwatch/switchman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
 	"github.com/DRuggeri/labwatch/watchers/common"
+	"github.com/DRuggeri/labwatch/watchers/openwrt"
 	"github.com/jacobsa/go-serial/serial"
 )
 
@@ -29,6 +30,7 @@ type BriefStatus struct {
 	Power       powerman.PowerStatus               `json:"power"`
 	Logs        common.LogStats                    `json:"logs"`
 	Switch      switchman.SwitchStatus             `json:"switch"`
+	OpenWrt     openwrt.OpenWrtStatus              `json:"openwrt"`
 }
 
 func NewStatusinator(port string, l *slog.Logger) (*Statusinator, error) {
@@ -72,7 +74,7 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 			if ok {
 				m.log.Debug("received status update")
 
-				// Create a deep copy of everything to prevent concurrent modification
+				// Create a copy of everything to prevent concurrent modification
 				briefStatus := BriefStatus{
 					Power: powerman.PowerStatus{
 						P1: s.Power.P1,
@@ -132,6 +134,12 @@ func (m *Statusinator) Watch(controlContext context.Context, status <-chan commo
 						InitializedPods:        s.Initializer.InitializedPods,
 						CurrentStep:            s.Initializer.CurrentStep,
 						Failed:                 s.Initializer.Failed,
+					},
+					OpenWrt: openwrt.OpenWrtStatus{
+						NumLanIn:  s.OpenWrt.NumLanIn,
+						NumLanOut: s.OpenWrt.NumLanOut,
+						NumWanIn:  s.OpenWrt.NumWanIn,
+						NumWanOut: s.OpenWrt.NumWanOut,
 					},
 				}
 
