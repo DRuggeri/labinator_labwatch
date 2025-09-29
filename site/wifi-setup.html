@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wi-Fi Setup - Labinator</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+		
+		body {
+			font-family: 'Arial', sans-serif;
+			background: #191919;
+			color: white;
+			overflow: hidden;
+			width: 1024px;
+			height: 600px;
+		}
+		
+		.container {
+			width: 100%;
+			height: 100vh;
+			display: flex;
+			flex-direction: column;
+			padding: 20px;
+		}
+		
+		h1 {
+			font-size: 36px;
+			text-align: center;
+			margin-bottom: 20px;
+		}
+		
+		.step {
+			flex: 1;
+			display: none;
+			flex-direction: column;
+		}
+		
+		.step.active {
+			display: flex;
+		}
+		
+		/* Network List Step */
+		.network-list {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		
+		.network-item {
+			background: rgba(255, 255, 255, 0.1);
+			border: 2px solid rgba(255, 255, 255, 0.3);
+			border-radius: 6px;
+			padding: 12px 16px;
+			cursor: pointer;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			font-size: 24px;
+			height: 60px;
+		}
+		
+		.network-item:hover {
+			background: rgba(255, 255, 255, 0.2);
+			border-color: rgba(255, 255, 255, 0.6);
+		}
+		
+		.network-security {
+			font-size: 18px;
+			color: #ffc107;
+		}
+		
+		/* Password Step */
+		.password-section {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			gap: 15px;
+		}
+		
+		.network-name {
+			font-size: 24px;
+			text-align: center;
+			margin-bottom: 10px;
+		}
+		
+		.password-display {
+			background: rgba(255, 255, 255, 0.1);
+			border: 2px solid rgba(255, 255, 255, 0.3);
+			border-radius: 6px;
+			padding: 12px;
+			font-size: 28px;
+			text-align: center;
+			height: 60px;
+			line-height: 36px;
+		}
+		
+		.keyboard {
+			display: grid;
+			grid-template-columns: repeat(15, 1fr);
+			gap: 3px;
+			flex: 1;
+		}
+		
+		.key {
+			background: rgba(255, 255, 255, 0.1);
+			border: 2px solid rgba(255, 255, 255, 0.3);
+			border-radius: 4px;
+			cursor: pointer;
+			text-align: center;
+			font-size: 16px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			user-select: none;
+			height: 40px;
+			transition: all 0.2s ease;
+		}
+		
+		.key:hover {
+			background: rgba(255, 255, 255, 0.2);
+		}
+		
+		.key.modifier {
+			background: rgba(0, 123, 255, 0.3);
+			border-color: rgba(0, 123, 255, 0.5);
+			font-size: 14px;
+		}
+		
+		.key.shift.active,
+		.key.caps.active {
+			background: rgba(0, 123, 255, 0.6);
+			border-color: #007bff;
+		}
+		
+		.key.space {
+			font-size: 14px;
+		}
+		
+		.key.backspace,
+		.key.enter,
+		.key.tab {
+			font-size: 14px;
+		}
+		
+		/* Status Step */
+		.status-section {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+			text-align: center;
+		}
+		
+		.status-message {
+			font-size: 32px;
+			margin: 20px 0;
+		}
+		
+		.success { color: #28a745; }
+		.error { color: #dc3545; }
+		.loading { color: #ffc107; }
+		
+		/* Buttons */
+		.button-row {
+			display: flex;
+			gap: 10px;
+			justify-content: center;
+			margin-top: 20px;
+			flex-shrink: 0;
+		}
+		
+		.btn {
+			background: rgba(255, 255, 255, 0.1);
+			border: 2px solid rgba(255, 255, 255, 0.3);
+			border-radius: 6px;
+			padding: 12px 20px;
+			cursor: pointer;
+			font-size: 20px;
+			color: white;
+			min-width: 100px;
+		}
+		
+		.btn:hover {
+			background: rgba(255, 255, 255, 0.2);
+		}
+		
+		.btn.primary {
+			background: rgba(0, 123, 255, 0.5);
+			border-color: #007bff;
+		}
+		
+		.btn.secondary {
+			background: rgba(108, 117, 125, 0.3);
+			border-color: #6c757d;
+		}
+		
+		/* Pagination */
+		.pagination {
+			display: flex;
+			gap: 5px;
+			justify-content: center;
+			margin: 10px 0;
+		}
+		
+		.page-btn {
+			background: rgba(255, 255, 255, 0.1);
+			border: 2px solid rgba(255, 255, 255, 0.3);
+			border-radius: 4px;
+			padding: 8px 12px;
+			cursor: pointer;
+			font-size: 18px;
+			color: white;
+		}
+		
+		.page-btn.active {
+			background: rgba(0, 123, 255, 0.5);
+			border-color: #007bff;
+		}
+		
+		.page-btn.disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		
+		.page-info {
+			font-size: 18px;
+			color: white;
+			padding: 8px 12px;
+			display: flex;
+			align-items: center;
+		}
+		
+		.hidden {
+			display: none !important;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<!-- Step 1: Network Selection -->
+		<div class="step active" id="step1">
+			<h1>Wi-Fi Networks</h1>
+			<div id="loadingNetworks" class="status-message loading">
+				Scanning for networks...
+			</div>
+			<div id="networkList" class="network-list hidden"></div>
+			<div id="pagination" class="pagination hidden"></div>
+			<div class="button-row">
+				<div class="btn secondary" onclick="refreshNetworks()">Refresh</div>
+				<div class="btn primary" onclick="goHome()">Cancel</div>
+			</div>
+		</div>
+
+		<!-- Step 2: Password Entry -->
+		<div class="step" id="step2">
+			<h1>Enter Password</h1>
+			<div class="password-section">
+				<div id="selectedNetworkName" class="network-name"></div>
+				<div id="passwordDisplay" class="password-display"></div>
+				<div class="keyboard" id="keyboard"></div>
+			</div>
+			<div class="button-row">
+				<div class="btn secondary" onclick="goBack()">Back</div>
+				<div class="btn secondary" onclick="clearPassword()">Clear</div>
+				<div class="btn primary" onclick="connectToNetwork()">Connect</div>
+			</div>
+		</div>
+
+		<!-- Step 3: Connection Status -->
+		<div class="step" id="step3">
+			<div class="status-section">
+				<h1 id="statusTitle">Connecting...</h1>
+				<div id="statusMessage" class="status-message loading">Attempting to connect to network...</div>
+				<div class="button-row" id="statusButtons" style="display: none;">
+					<div class="btn secondary" onclick="goBack()">Back</div>
+					<div class="btn primary" onclick="tryAgain()">Try Again</div>
+					<div class="btn success" onclick="goHome()">Finish</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		// Global state
+		let availableNetworks = [];
+		let selectedNetwork = null;
+		let currentPassword = '';
+		let currentPage = 0;
+		const networksPerPage = 5;
+		let currentStep = 1;
+		let isShifted = false;
+		let isCapsLock = false;
+
+		// Initialize the page
+		document.addEventListener('DOMContentLoaded', function() {
+			createKeyboard();
+			loadNetworks();
+		});
+
+		// Step navigation
+		function showStep(stepNumber) {
+			document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
+			document.getElementById(`step${stepNumber}`).classList.add('active');
+			currentStep = stepNumber;
+		}
+
+		// Stub function to get available networks
+		async function getAvailableNetworks() {
+			// TODO: Replace with actual API call
+			// return await fetch('/api/wifi/scan').then(r => r.json());
+			
+			// Stub data for testing
+			return new Promise(resolve => {
+				setTimeout(() => {
+					resolve({
+						success: true,
+						networks: [
+							{ ssid: 'HomeWiFi', secured: true, signal: 85 },
+							{ ssid: 'OfficeNet', secured: true, signal: 72 },
+							{ ssid: 'PublicWiFi', secured: false, signal: 60 },
+							{ ssid: 'GuestNetwork', secured: true, signal: 45 },
+							{ ssid: 'TestNetwork', secured: false, signal: 30 },
+							{ ssid: 'SecureNet', secured: true, signal: 90 },
+							{ ssid: 'OpenWiFi', secured: false, signal: 55 },
+							{ ssid: 'WorkNetwork', secured: true, signal: 65 }
+						]
+					});
+				}, 1500);
+			});
+		}
+
+		// Stub function to connect to network
+		async function connectToWifiNetwork(ssid, password) {
+			// TODO: Replace with actual API call
+			// return await fetch('/api/wifi/connect', {
+			//     method: 'POST',
+			//     headers: { 'Content-Type': 'application/json' },
+			//     body: JSON.stringify({ ssid, password })
+			// }).then(r => r.json());
+			
+			// Stub logic for testing
+			return new Promise(resolve => {
+				setTimeout(() => {
+					// Simulate success/failure - treat "wrongpassword" as failure
+					const success = password === 'wrongpassword' ? false : true;
+					resolve({
+						success: success,
+						message: success ? 'Connected successfully!' : 'Invalid password. Please try again.'
+					});
+				}, 3000);
+			});
+		}
+
+		// Load available networks
+		async function loadNetworks() {
+			document.getElementById('loadingNetworks').classList.remove('hidden');
+			document.getElementById('networkList').classList.add('hidden');
+			document.getElementById('pagination').classList.add('hidden');
+
+			try {
+				const response = await getAvailableNetworks();
+				if (response.success) {
+					availableNetworks = response.networks.sort((a, b) => b.signal - a.signal);
+					displayNetworks();
+				} else {
+					showError('Failed to load networks');
+				}
+			} catch (error) {
+				showError('Error scanning for networks');
+			}
+
+			document.getElementById('loadingNetworks').classList.add('hidden');
+		}
+
+		// Display networks with pagination
+		function displayNetworks() {
+			const networkList = document.getElementById('networkList');
+			const pagination = document.getElementById('pagination');
+			
+			networkList.innerHTML = '';
+			
+			const startIndex = currentPage * networksPerPage;
+			const endIndex = Math.min(startIndex + networksPerPage, availableNetworks.length);
+			const pageNetworks = availableNetworks.slice(startIndex, endIndex);
+
+			pageNetworks.forEach((network, index) => {
+				const networkElement = document.createElement('div');
+				networkElement.className = 'network-item';
+				networkElement.onclick = () => selectNetwork(network);
+				
+				networkElement.innerHTML = `
+					<span>${network.ssid}</span>
+					<span class="network-security">${network.secured ? '🔒' : '📶'} ${network.signal}%</span>
+				`;
+				
+				networkList.appendChild(networkElement);
+			});
+
+			// Show pagination if needed
+			const totalPages = Math.ceil(availableNetworks.length / networksPerPage);
+			if (totalPages > 1) {
+				pagination.innerHTML = '';
+				
+				// Previous button
+				const prevBtn = document.createElement('div');
+				prevBtn.className = `page-btn ${currentPage === 0 ? 'disabled' : ''}`;
+				prevBtn.textContent = '‹ Previous';
+				prevBtn.onclick = () => {
+					if (currentPage > 0) {
+						currentPage--;
+						displayNetworks();
+					}
+				};
+				pagination.appendChild(prevBtn);
+				
+				// Page indicator
+				const pageInfo = document.createElement('div');
+				pageInfo.className = 'page-info';
+				pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+				pagination.appendChild(pageInfo);
+				
+				// Next button
+				const nextBtn = document.createElement('div');
+				nextBtn.className = `page-btn ${currentPage === totalPages - 1 ? 'disabled' : ''}`;
+				nextBtn.textContent = 'Next ›';
+				nextBtn.onclick = () => {
+					if (currentPage < totalPages - 1) {
+						currentPage++;
+						displayNetworks();
+					}
+				};
+				pagination.appendChild(nextBtn);
+				
+				pagination.classList.remove('hidden');
+			} else {
+				pagination.classList.add('hidden');
+			}
+
+			networkList.classList.remove('hidden');
+		}
+
+		// Select a network
+		function selectNetwork(network) {
+			selectedNetwork = network;
+			// Reset password state when selecting a new network
+			currentPassword = '';
+			
+			if (network.secured) {
+				showPasswordEntry();
+			} else {
+				// Connect directly to open network
+				connectToNetwork();
+			}
+		}
+
+		// Show password entry step
+		function showPasswordEntry() {
+			document.getElementById('selectedNetworkName').textContent = `Connect to: ${selectedNetwork.ssid}`;
+			currentPassword = '';
+			isShifted = false;
+			isCapsLock = false;
+			updatePasswordDisplay();
+			createKeyboard(); // Recreate keyboard with reset state
+			showStep(2);
+		}
+
+		// Create virtual keyboard
+		function createKeyboard() {
+			const keyboard = document.getElementById('keyboard');
+			keyboard.innerHTML = '';
+
+			// Define keyboard layout with shift states
+			const keyboardLayout = [
+				// Row 1 - Numbers and symbols
+				[
+					{normal: '`', shifted: '~'},
+					{normal: '1', shifted: '!'},
+					{normal: '2', shifted: '@'},
+					{normal: '3', shifted: '#'},
+					{normal: '4', shifted: '$'},
+					{normal: '5', shifted: '%'},
+					{normal: '6', shifted: '^'},
+					{normal: '7', shifted: '&'},
+					{normal: '8', shifted: '*'},
+					{normal: '9', shifted: '('},
+					{normal: '0', shifted: ')'},
+					{normal: '-', shifted: '_'},
+					{normal: '=', shifted: '+'},
+					{key: '⌫', type: 'backspace', span: 2}
+				],
+				// Row 2 - QWERTY top row
+				[
+					{key: 'Tab', type: 'tab', span: 2},
+					{normal: 'q', shifted: 'Q'},
+					{normal: 'w', shifted: 'W'},
+					{normal: 'e', shifted: 'E'},
+					{normal: 'r', shifted: 'R'},
+					{normal: 't', shifted: 'T'},
+					{normal: 'y', shifted: 'Y'},
+					{normal: 'u', shifted: 'U'},
+					{normal: 'i', shifted: 'I'},
+					{normal: 'o', shifted: 'O'},
+					{normal: 'p', shifted: 'P'},
+					{normal: '[', shifted: '{'},
+					{normal: ']', shifted: '}'},
+					{normal: '\\', shifted: '|'}
+				],
+				// Row 3 - ASDF home row
+				[
+					{key: 'Caps', type: 'caps', span: 2},
+					{normal: 'a', shifted: 'A'},
+					{normal: 's', shifted: 'S'},
+					{normal: 'd', shifted: 'D'},
+					{normal: 'f', shifted: 'F'},
+					{normal: 'g', shifted: 'G'},
+					{normal: 'h', shifted: 'H'},
+					{normal: 'j', shifted: 'J'},
+					{normal: 'k', shifted: 'K'},
+					{normal: 'l', shifted: 'L'},
+					{normal: ';', shifted: ':'},
+					{normal: "'", shifted: '"'},
+					{key: 'Enter', type: 'enter', span: 2}
+				],
+				// Row 4 - ZXCV bottom row
+				[
+					{key: 'Shift', type: 'shift', span: 3},
+					{normal: 'z', shifted: 'Z'},
+					{normal: 'x', shifted: 'X'},
+					{normal: 'c', shifted: 'C'},
+					{normal: 'v', shifted: 'V'},
+					{normal: 'b', shifted: 'B'},
+					{normal: 'n', shifted: 'N'},
+					{normal: 'm', shifted: 'M'},
+					{normal: ',', shifted: '<'},
+					{normal: '.', shifted: '>'},
+					{normal: '/', shifted: '?'},
+					{key: 'Shift', type: 'shift', span: 2}
+				],
+				// Row 5 - Space bar
+				[
+					{key: 'Space', type: 'space', span: 15}
+				]
+			];
+
+			keyboardLayout.forEach(row => {
+				row.forEach(keyData => {
+					const key = createKey(keyData);
+					keyboard.appendChild(key);
+				});
+			});
+		}
+
+		function createKey(keyData) {
+			const key = document.createElement('div');
+			let className = 'key';
+			
+			// Handle different key types
+			if (keyData.span) {
+				key.style.gridColumn = `span ${keyData.span}`;
+			}
+			
+			if (keyData.type) {
+				className += ` ${keyData.type}`;
+				key.textContent = keyData.key;
+				
+				// Special styling for modifier keys
+				if (['shift', 'caps'].includes(keyData.type)) {
+					className += ' modifier';
+				}
+				
+				// Add active state for shift and caps lock
+				if ((keyData.type === 'shift' && isShifted) || 
+					(keyData.type === 'caps' && isCapsLock)) {
+					className += ' active';
+				}
+			} else {
+				// Regular character key
+				const char = (isShifted || isCapsLock) ? keyData.shifted : keyData.normal;
+				key.textContent = char;
+			}
+			
+			key.className = className;
+			
+			key.onclick = () => {
+				if (keyData.type === 'backspace') {
+					currentPassword = currentPassword.slice(0, -1);
+				} else if (keyData.type === 'space') {
+					currentPassword += ' ';
+				} else if (keyData.type === 'tab') {
+					currentPassword += '\t';
+				} else if (keyData.type === 'enter') {
+					// Could trigger connect action, but for now just add newline
+					currentPassword += '\n';
+				} else if (keyData.type === 'shift') {
+					isShifted = !isShifted;
+					updateKeyboardDisplay();
+					return; // Don't update password display
+				} else if (keyData.type === 'caps') {
+					isCapsLock = !isCapsLock;
+					updateKeyboardDisplay();
+					return; // Don't update password display
+				} else if (keyData.normal) {
+					// Regular character
+					const char = (isShifted || isCapsLock) ? keyData.shifted : keyData.normal;
+					currentPassword += char;
+					
+					// Reset shift after character input (but not caps lock)
+					if (isShifted) {
+						isShifted = false;
+						updateKeyboardDisplay();
+					}
+				}
+				
+				updatePasswordDisplay();
+			};
+			
+			return key;
+		}
+		
+		function updateKeyboardDisplay() {
+			// Recreate keyboard to show current shift/caps state
+			createKeyboard();
+		}
+
+		// Update password display
+		function updatePasswordDisplay() {
+			const display = document.getElementById('passwordDisplay');
+			display.textContent = currentPassword;
+		}
+
+		// Clear password
+		function clearPassword() {
+			currentPassword = '';
+			updatePasswordDisplay();
+		}
+
+		// Connect to network
+		async function connectToNetwork() {
+			showStep(3);
+			document.getElementById('statusTitle').textContent = 'Connecting...';
+			document.getElementById('statusMessage').textContent = `Connecting to ${selectedNetwork.ssid}...`;
+			document.getElementById('statusMessage').className = 'status-message loading';
+			document.getElementById('statusButtons').style.display = 'none';
+			
+			try {
+				const response = await connectToWifiNetwork(selectedNetwork.ssid, currentPassword);
+				
+				if (response.success) {
+					document.getElementById('statusTitle').textContent = 'Connected!';
+					document.getElementById('statusMessage').textContent = response.message;
+					document.getElementById('statusMessage').className = 'status-message success';
+				} else {
+					document.getElementById('statusTitle').textContent = 'Failed';
+					document.getElementById('statusMessage').textContent = response.message;
+					document.getElementById('statusMessage').className = 'status-message error';
+				}
+			} catch (error) {
+				document.getElementById('statusTitle').textContent = 'Error';
+				document.getElementById('statusMessage').textContent = 'Connection failed. Please try again.';
+				document.getElementById('statusMessage').className = 'status-message error';
+			}
+			
+			document.getElementById('statusButtons').style.display = 'flex';
+		}
+
+		// Go back to previous step
+		function goBack() {
+			if (currentStep === 2) {
+				showStep(1);
+			} else if (currentStep === 3) {
+				showStep(selectedNetwork.secured ? 2 : 1);
+			}
+		}
+
+		// Try again (from status page)
+		function tryAgain() {
+			if (selectedNetwork.secured) {
+				showStep(2);
+			} else {
+				connectToNetwork();
+			}
+		}
+
+		// Refresh networks
+		function refreshNetworks() {
+			currentPage = 0;
+			loadNetworks();
+		}
+
+		// Go home
+		function goHome() {
+			window.location.href = 'https://boss.local:3000/grafana/d/otelcol-contrib-hostmetrics/opentelemetry-collector-hostmetrics-node-exporter?kiosk=true&orgId=1&from=now-15m&to=now&timezone=browser&var-DS_PROMETHEUS=default&var-service_namespace=agent&var-host=boss&var-diskdevices=[a-z]%2B|nvme[0-9]%2Bn[0-9]%2B|mmcblk[0-9]%2B&refresh=30s';
+		}
+
+		// Show error message
+		function showError(message) {
+			const loadingEl = document.getElementById('loadingNetworks');
+			loadingEl.textContent = message;
+			loadingEl.className = 'status-message error';
+		}
+	</script>
+</body>
+</html>
