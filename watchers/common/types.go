@@ -2,6 +2,8 @@
 package common
 
 import (
+	"maps"
+
 	"github.com/DRuggeri/labwatch/powerman"
 	"github.com/DRuggeri/labwatch/switchman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
@@ -23,6 +25,42 @@ type LabStatus struct {
 	Ports       port.PortStatus                    `json:"ports"`
 	Callbacks   callbacks.CallbackStatus           `json:"callbacks"`
 	Logs        LogStats                           `json:"logs"`
+}
+
+// Clone creates a deep copy of LabStatus for safe concurrent access
+func (ls *LabStatus) Clone() LabStatus {
+	clone := *ls
+
+	if ls.Kubernetes != nil {
+		clone.Kubernetes = make(map[string]kubernetes.PodStatus, len(ls.Kubernetes))
+		maps.Copy(ls.Kubernetes, clone.Kubernetes)
+	}
+
+	if ls.Talos != nil {
+		clone.Talos = make(map[string]talos.NodeStatus, len(ls.Talos))
+		maps.Copy(ls.Talos, clone.Talos)
+	}
+
+	if ls.Ports != nil {
+		clone.Ports = make(port.PortStatus, len(ls.Ports))
+		maps.Copy(ls.Ports, clone.Ports)
+	}
+
+	if ls.Callbacks.KVPairs != nil || ls.Callbacks.ClientCount != nil {
+		clone.Callbacks = callbacks.CallbackStatus{
+			KVPairs:     make(map[string]map[string]string),
+			ClientCount: make(map[string]int),
+		}
+		for k, v := range ls.Callbacks.KVPairs {
+			clone.Callbacks.KVPairs[k] = make(map[string]string, len(v))
+			maps.Copy(ls.Callbacks.KVPairs[k], clone.Callbacks.KVPairs[k])
+		}
+		maps.Copy(ls.Callbacks.ClientCount, clone.Callbacks.ClientCount)
+	}
+
+	clone.Logs = ls.Logs.Copy()
+
+	return clone
 }
 
 // LogEvent represents a single log event from any watcher type.
@@ -148,27 +186,19 @@ func (stats *LogStats) Copy() LogStats {
 	// Deep copy the maps
 	if stats.DHCPServed != nil {
 		copy.DHCPServed = make(map[string]int, len(stats.DHCPServed))
-		for key, value := range stats.DHCPServed {
-			copy.DHCPServed[key] = value
-		}
+		maps.Copy(copy.DHCPServed, stats.DHCPServed)
 	}
 	if stats.ChainServed != nil {
 		copy.ChainServed = make(map[string]int, len(stats.ChainServed))
-		for key, value := range stats.ChainServed {
-			copy.ChainServed[key] = value
-		}
+		maps.Copy(copy.ChainServed, stats.ChainServed)
 	}
 	if stats.IPXEServed != nil {
 		copy.IPXEServed = make(map[string]int, len(stats.IPXEServed))
-		for key, value := range stats.IPXEServed {
-			copy.IPXEServed[key] = value
-		}
+		maps.Copy(copy.IPXEServed, stats.IPXEServed)
 	}
 	if stats.AssetsServed != nil {
 		copy.AssetsServed = make(map[string]int, len(stats.AssetsServed))
-		for key, value := range stats.AssetsServed {
-			copy.AssetsServed[key] = value
-		}
+		maps.Copy(copy.AssetsServed, stats.AssetsServed)
 	}
 
 	return copy
