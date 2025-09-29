@@ -58,7 +58,7 @@ func (ls *LabStatus) Clone() LabStatus {
 		maps.Copy(ls.Callbacks.ClientCount, clone.Callbacks.ClientCount)
 	}
 
-	clone.Logs = ls.Logs.Copy()
+	clone.Logs = ls.Logs.Clone()
 
 	return clone
 }
@@ -180,7 +180,7 @@ func (stats *LogStats) Add(s LogStats) {
 	}
 }
 
-func (stats *LogStats) Copy() LogStats {
+func (stats *LogStats) Clone() LogStats {
 	copy := *stats // Copy all scalar fields
 
 	// Deep copy the maps

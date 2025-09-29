@@ -300,5 +300,5 @@ func (w *OtelFileWatcher) getStatsCopy() common.LogStats {
 	w.statsMutex.RLock()
 	defer w.statsMutex.RUnlock()
 
-	return w.stats.Copy()
+	return w.stats.Clone()
 }
