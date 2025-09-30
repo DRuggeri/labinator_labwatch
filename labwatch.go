@@ -27,6 +27,7 @@ import (
 	"github.com/DRuggeri/labwatch/handlers/statushandler"
 	"github.com/DRuggeri/labwatch/lablinkmanager"
 	"github.com/DRuggeri/labwatch/powerman"
+	"github.com/DRuggeri/labwatch/routerman"
 	"github.com/DRuggeri/labwatch/statusinator"
 	"github.com/DRuggeri/labwatch/switchman"
 	"github.com/DRuggeri/labwatch/talosinitializer"
@@ -171,6 +172,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	rMan, err := routerman.NewRouterManager(cfg.RouterBaseURL, cfg.RouterUsername, cfg.RouterPassword, log)
+	if err != nil {
+		log.Error("failed to create the router manager", "error", err.Error())
+		os.Exit(1)
+	}
+
 	sMan, err := switchman.NewSwitchManager(cfg.SwitchBaseURL, cfg.SwitchUsername, cfg.SwitchPassword, log)
 	if err != nil {
 		log.Error("failed to create the switch manager", "error", err.Error())
@@ -223,9 +230,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	http.Handle("/power", pMan)
-	http.Handle("/switch", sMan)
-	http.Handle("/callbacks", cbWatcher)
+	mux := http.NewServeMux()
+	mux.Handle("/power", pMan)
+	mux.Handle("/router/", rMan)
+	mux.Handle("/switch", sMan)
+	mux.Handle("/callbacks", cbWatcher)
 
 	reliabilityHandler, err := reliabilitytesthandler.NewReliabilityTestHandler(cfg.ReliabilityTest, log)
 	if err != nil {
@@ -238,14 +247,14 @@ func main() {
 	statusWatcher.AddClient("reliabilitytest", reliabilityStatusChan)
 	go reliabilityHandler.Watch(mainCtx, reliabilityStatusChan)
 
-	http.Handle("/reliabilitytest", reliabilityHandler)
+	mux.Handle("/reliabilitytest", reliabilityHandler)
 
 	scalerHandler, err := scalerhandler.NewScalerHandler("", cfg.PodWatchNamespace, log)
 	if err != nil {
 		log.Error("failed to create scaler handler", "error", err)
 		os.Exit(1)
 	}
-	http.Handle("/scale", scalerHandler)
+	mux.Handle("/scale", scalerHandler)
 
 	resetWatchers := func() {
 		log.Info("resetting watchers")
@@ -260,18 +269,18 @@ func main() {
 		}
 	}
 
-	http.HandleFunc("/resetwatchers", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/resetwatchers", func(w http.ResponseWriter, r *http.Request) {
 		resetWatchers()
 	})
 
-	http.HandleFunc("/getlab", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/getlab", func(w http.ResponseWriter, r *http.Request) {
 		activeLabMutex.Lock()
 		lab := activeLab
 		activeLabMutex.Unlock()
 		w.Write([]byte(lab))
 	})
 
-	http.HandleFunc("/lastlab", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/lastlab", func(w http.ResponseWriter, r *http.Request) {
 		lastLab := initializer.GetLastLab()
 		if lastLab == "" {
 			log.Error("failed to get last lab")
@@ -281,7 +290,7 @@ func main() {
 		w.Write([]byte(lastLab))
 	})
 
-	http.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/setlab", func(w http.ResponseWriter, r *http.Request) {
 		adopt := false
 		defer func() {
 			if err := recover(); err != nil { //catch
@@ -380,7 +389,7 @@ func main() {
 		initializerMutex.Unlock()
 	})
 
-	http.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/system", func(w http.ResponseWriter, r *http.Request) {
 		action := strings.ToLower(r.URL.Query().Get("action"))
 		var args []string
 		switch action {
@@ -415,16 +424,16 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	http.Handle("/status", statusHandler)
-	http.Handle("/events", eventSendHandler)
+	mux.Handle("/status", statusHandler)
+	mux.Handle("/events", eventSendHandler)
 
 	browserHandler, _ := browserhandler.NewBrowserHandler(log)
-	http.HandleFunc("/navigate", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/navigate", func(w http.ResponseWriter, r *http.Request) {
 		wMan.Kill(wm.WMScreenBottom)
 		browserHandler.ServeHTTP(w, r)
 	})
 
-	http.HandleFunc("/launch", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/launch", func(w http.ResponseWriter, r *http.Request) {
 		command := strings.ToLower(r.URL.Query().Get("command"))
 		var cmd *exec.Cmd
 
@@ -458,10 +467,10 @@ func main() {
 		wMan.StartWindow(mainCtx, cmd, wm.WMScreenBottom)
 	})
 
-	http.Handle("/loadstats", loadWatcher)
-	http.Handle("/loadinfo", loadStatSendHandler)
+	mux.Handle("/loadstats", loadWatcher)
+	mux.Handle("/loadinfo", loadStatSendHandler)
 
-	http.HandleFunc("/scenarios", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/scenarios", func(w http.ResponseWriter, r *http.Request) {
 		input, err := os.ReadFile(cfg.TalosScenarioConfig)
 		if err != nil {
 			log.Error("failed to read scenario config file", "error", err.Error())
@@ -515,7 +524,7 @@ func main() {
 
 	// Serve static HTML files from the configured directory
 	htmlFileServer := http.FileServer(http.Dir(cfg.DocDir))
-	http.Handle("/html/", http.StripPrefix("/html/", htmlFileServer))
+	mux.Handle("/html/", http.StripPrefix("/html/", htmlFileServer))
 
 	fsys, err := fs.Sub(siteFS, "site")
 	if err != nil {
@@ -524,7 +533,7 @@ func main() {
 	}
 
 	fileServer := http.FileServer(http.FS(fsys))
-	http.Handle("/", fileServer)
+	mux.Handle("/", fileServer)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
@@ -548,7 +557,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	err = http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":8080", mux)
 	log.With("operation", "main", "error", err.Error()).Info("shutting down")
 }
 
@@ -629,7 +638,7 @@ func startWatchers(ctx context.Context, cfg LabwatchConfig, lab string, pMan *po
 		cancel()
 		return nil, err
 	}
-	kubeInfo := make(chan map[string]kubernetes.PodStatus)
+	kubeInfo := make(chan kubernetes.KubeStatus)
 	go kubeWatcher.Watch(ctx, kubeInfo)
 
 	log = log.With("operation", "watchloop")

@@ -310,51 +310,74 @@
 			currentStep = stepNumber;
 		}
 
-		// Stub function to get available networks
+		// Function to get available networks from routermanager
 		async function getAvailableNetworks() {
-			// TODO: Replace with actual API call
-			// return await fetch('/api/wifi/scan').then(r => r.json());
-			
-			// Stub data for testing
-			return new Promise(resolve => {
-				setTimeout(() => {
-					resolve({
+			try {
+				const response = await fetch('/router/networks');
+				const data = await response.json();
+				
+				if (data.success) {
+					// Filter out networks without SSID and return in expected format
+					const validNetworks = data.networks
+						.filter(network => network.ssid && network.ssid.trim() !== '')
+						.map(network => ({
+							ssid: network.ssid,
+							secured: network.secured,
+							signal: Math.abs(network.signal), // Convert negative dBm to positive for display
+							bssid: network.bssid
+						}));
+					
+					return {
 						success: true,
-						networks: [
-							{ ssid: 'HomeWiFi', secured: true, signal: 85 },
-							{ ssid: 'OfficeNet', secured: true, signal: 72 },
-							{ ssid: 'PublicWiFi', secured: false, signal: 60 },
-							{ ssid: 'GuestNetwork', secured: true, signal: 45 },
-							{ ssid: 'TestNetwork', secured: false, signal: 30 },
-							{ ssid: 'SecureNet', secured: true, signal: 90 },
-							{ ssid: 'OpenWiFi', secured: false, signal: 55 },
-							{ ssid: 'WorkNetwork', secured: true, signal: 65 }
-						]
-					});
-				}, 1500);
-			});
+						networks: validNetworks
+					};
+				} else {
+					throw new Error(data.message || 'Failed to scan WiFi networks');
+				}
+			} catch (error) {
+				console.error('Error scanning WiFi networks:', error);
+				return {
+					success: false,
+					error: error.message,
+					networks: []
+				};
+			}
 		}
 
-		// Stub function to connect to network
+		// Function to connect to WiFi network via routermanager
 		async function connectToWifiNetwork(ssid, password) {
-			// TODO: Replace with actual API call
-			// return await fetch('/api/wifi/connect', {
-			//     method: 'POST',
-			//     headers: { 'Content-Type': 'application/json' },
-			//     body: JSON.stringify({ ssid, password })
-			// }).then(r => r.json());
-			
-			// Stub logic for testing
-			return new Promise(resolve => {
-				setTimeout(() => {
-					// Simulate success/failure - treat "wrongpassword" as failure
-					const success = password === 'wrongpassword' ? false : true;
-					resolve({
-						success: success,
-						message: success ? 'Connected successfully!' : 'Invalid password. Please try again.'
-					});
-				}, 3000);
-			});
+			try {
+				const response = await fetch('/router/connect', {
+					method: 'POST',
+					headers: { 
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({ 
+						ssid: ssid, 
+						password: password 
+					})
+				});
+				
+				const data = await response.json();
+				
+				if (data.success) {
+					return {
+						success: true,
+						message: data.message || 'Connected successfully!'
+					};
+				} else {
+					return {
+						success: false,
+						message: data.message || data.error || 'Connection failed'
+					};
+				}
+			} catch (error) {
+				console.error('Error connecting to WiFi:', error);
+				return {
+					success: false,
+					message: 'Network error: ' + error.message
+				};
+			}
 		}
 
 		// Load available networks

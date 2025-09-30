@@ -45,12 +45,13 @@ func NewRouterManager(baseURL string, username string, password string, l *slog.
 	}
 
 	m := &RouterManager{
-		baseURL:   baseURL,
-		client:    client,
-		log:       l.With("operation", "routermanager"),
-		username:  username,
-		password:  password,
-		requestID: 1,
+		baseURL:      baseURL,
+		client:       client,
+		log:          l.With("operation", "routermanager"),
+		username:     username,
+		password:     password,
+		requestID:    1,
+		networkCache: make(map[string]WiFiScanResult),
 	}
 
 	err := m.authenticate()
