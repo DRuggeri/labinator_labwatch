@@ -32,18 +32,15 @@ func (ls *LabStatus) Clone() LabStatus {
 	clone := *ls
 
 	if ls.Kubernetes != nil {
-		clone.Kubernetes = make(map[string]kubernetes.PodStatus, len(ls.Kubernetes))
-		maps.Copy(ls.Kubernetes, clone.Kubernetes)
+		clone.Kubernetes = maps.Clone(ls.Kubernetes)
 	}
 
 	if ls.Talos != nil {
-		clone.Talos = make(map[string]talos.NodeStatus, len(ls.Talos))
-		maps.Copy(ls.Talos, clone.Talos)
+		clone.Talos = maps.Clone(ls.Talos)
 	}
 
 	if ls.Ports != nil {
-		clone.Ports = make(port.PortStatus, len(ls.Ports))
-		maps.Copy(ls.Ports, clone.Ports)
+		clone.Ports = maps.Clone(ls.Ports)
 	}
 
 	if ls.Callbacks.KVPairs != nil || ls.Callbacks.ClientCount != nil {
@@ -51,11 +48,10 @@ func (ls *LabStatus) Clone() LabStatus {
 			KVPairs:     make(map[string]map[string]string),
 			ClientCount: make(map[string]int),
 		}
-		for k, v := range ls.Callbacks.KVPairs {
-			clone.Callbacks.KVPairs[k] = make(map[string]string, len(v))
-			maps.Copy(ls.Callbacks.KVPairs[k], clone.Callbacks.KVPairs[k])
+		for k := range ls.Callbacks.KVPairs {
+			clone.Callbacks.KVPairs[k] = maps.Clone(ls.Callbacks.KVPairs[k])
 		}
-		maps.Copy(ls.Callbacks.ClientCount, clone.Callbacks.ClientCount)
+		clone.Callbacks.ClientCount = maps.Clone(ls.Callbacks.ClientCount)
 	}
 
 	clone.Logs = ls.Logs.Clone()
@@ -130,6 +126,26 @@ func NewLogStats() *LogStats {
 	}
 }
 
+func (stats *LogStats) Clone() LogStats {
+	clone := *stats // Copy all scalar fields
+
+	// Deep copy the maps
+	if stats.DHCPServed != nil {
+		clone.DHCPServed = maps.Clone(stats.DHCPServed)
+	}
+	if stats.ChainServed != nil {
+		clone.ChainServed = maps.Clone(stats.ChainServed)
+	}
+	if stats.IPXEServed != nil {
+		clone.IPXEServed = maps.Clone(stats.IPXEServed)
+	}
+	if stats.AssetsServed != nil {
+		clone.AssetsServed = maps.Clone(stats.AssetsServed)
+	}
+
+	return clone
+}
+
 func (stats *LogStats) Add(s LogStats) {
 	// Increment all scalar fields
 	stats.NumMessages += s.NumMessages
@@ -178,28 +194,4 @@ func (stats *LogStats) Add(s LogStats) {
 	for key, count := range s.AssetsServed {
 		stats.AssetsServed[key] += count
 	}
-}
-
-func (stats *LogStats) Clone() LogStats {
-	copy := *stats // Copy all scalar fields
-
-	// Deep copy the maps
-	if stats.DHCPServed != nil {
-		copy.DHCPServed = make(map[string]int, len(stats.DHCPServed))
-		maps.Copy(copy.DHCPServed, stats.DHCPServed)
-	}
-	if stats.ChainServed != nil {
-		copy.ChainServed = make(map[string]int, len(stats.ChainServed))
-		maps.Copy(copy.ChainServed, stats.ChainServed)
-	}
-	if stats.IPXEServed != nil {
-		copy.IPXEServed = make(map[string]int, len(stats.IPXEServed))
-		maps.Copy(copy.IPXEServed, stats.IPXEServed)
-	}
-	if stats.AssetsServed != nil {
-		copy.AssetsServed = make(map[string]int, len(stats.AssetsServed))
-		maps.Copy(copy.AssetsServed, stats.AssetsServed)
-	}
-
-	return copy
 }
