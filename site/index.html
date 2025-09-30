@@ -84,12 +84,10 @@
 				<section id="howto">
                     <p style="font-size: .5em;">Navigate using the menu along the top</p>
 					<p class="font-size: .5em;">
-						<ul>
-							<li><a href="/#aboutlabs">Labs Menu</a></li>
-							<li><a href="/#aboutchaos">Chaos Menu</a></li>
-							<li><a href="/#aboutobserve">Observe Menu</a></li>
-							<li><a href="/#aboutsystem">System Menu</a></li>
-						</ul>
+						<a href="/#aboutlabs">Labs Menu</a><br />
+						<a href="/#aboutchaos">Chaos Menu</a><br />
+						<a href="/#aboutobserve">Observe Menu</a><br />
+						<a href="/#aboutsystem">System Menu</a><br />
 					</p>
 					<a href="/#help" style="font-size: .5em;">back</a>
 				</section>
@@ -129,7 +127,7 @@
 						The Chaos menu lets you inject a little insanity into the lab.
 					</p>
 					<p style="font-size:.5em">
-						In future versions of Labinator, we will be able to add load to the system, kill Kubernetes pods, kill VMs, etc and additional observability options will let you see how the system reacts.
+						You can create/destroy load pods to add load to the system, kill VMs or nodes, restart nodes (which WILL fail), and even create network partitions!
 					</p>
 					<a href="/#howto" style="font-size: .5em;">back</a>
 				</section>
@@ -388,11 +386,11 @@
 
 
 				<section id="observe" data-name="Observe">
+					<a onclick="navigateBottomWindow('http://boss.local:8080/loadstatus.html')">Load Status</a><br />
+					<a onclick="navigateBottomWindow('http://boss.local:8080/status.html')">Lab Status</a><br />
 					<a href="#/bosssystem">Boss</a><br />
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/k8s_views_global/kubernetes-views-global?kiosk=true&orgId=1&from=now-1h&to=now&timezone=browser&var-datasource=prometheus&var-cluster=&var-resolution=30s&refresh=30s')">Kubernetes</a><br />
 					<a onclick="navigateBottomWindow('https://boss.local:3000/grafana/d/logs/logs?kiosk=&orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s')">Logs</a><br />
-					<a onclick="navigateBottomWindow('http://boss.local:8080/status.html')">Lab Status</a><br />
-					<a onclick="navigateBottomWindow('http://boss.local:8080/loadstatus.html')">Load Status</a><br />
 					<a href="#/vmvnc">VM Screens</a><br />
 				</section>
 				<section id="bosssystem">
