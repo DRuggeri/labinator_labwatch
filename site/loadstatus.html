@@ -123,6 +123,7 @@
             width: 1em;
             vertical-align: middle;
         }
+
         span.ok {
             background-color: green;
             margin-left: 15px;
@@ -930,12 +931,6 @@
                     newSpan.innerHTML = '🚀'
                     newDiv.appendChild(newSpan)
 
-                    newSpan = document.createElement('span')
-                    newSpan.setAttribute('id', 'Kubernetes-' + node['ip'])
-                    newSpan.className = 'kubernetes-state kubernetes-wait'
-                    newSpan.appendChild(createKubernetesSVG())
-                    newDiv.appendChild(newSpan)
-
                     /*
                     newSpan = document.createElement('span')
                     newSpan.className = 'type'
@@ -944,6 +939,12 @@
                     */
 
                     if (hasContainers) {
+                        newSpan = document.createElement('span')
+                        newSpan.setAttribute('id', 'Kubernetes-' + node['ip'])
+                        newSpan.className = 'kubernetes-state kubernetes-wait'
+                        newSpan.appendChild(createKubernetesSVG())
+                        newDiv.appendChild(newSpan)
+
                         okSpan = document.createElement('span')
                         okSpan.setAttribute('id', node['name'] + "-ok")
                         okSpan.setAttribute('data-highlight-changes', 'true')
