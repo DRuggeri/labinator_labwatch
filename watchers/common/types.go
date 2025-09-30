@@ -17,7 +17,7 @@ import (
 // LabStatus represents the overall status of the lab infrastructure.
 type LabStatus struct {
 	Initializer talosinitializer.InitializerStatus `json:"initializer"`
-	Kubernetes  map[string]kubernetes.PodStatus    `json:"kubernetes"`
+	Kubernetes  kubernetes.KubeStatus              `json:"kubernetes"`
 	Talos       map[string]talos.NodeStatus        `json:"talos"`
 	Power       powerman.PowerStatus               `json:"power"`
 	Switch      switchman.SwitchStatus             `json:"switch"`
@@ -31,8 +31,9 @@ type LabStatus struct {
 func (ls *LabStatus) Clone() LabStatus {
 	clone := *ls
 
-	if ls.Kubernetes != nil {
-		clone.Kubernetes = maps.Clone(ls.Kubernetes)
+	clone.Kubernetes = kubernetes.KubeStatus{
+		Pods:  maps.Clone(ls.Kubernetes.Pods),
+		Nodes: maps.Clone(ls.Kubernetes.Nodes),
 	}
 
 	if ls.Talos != nil {

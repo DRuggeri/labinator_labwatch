@@ -18,11 +18,11 @@ func main() {
 		panic(err)
 	}
 
-	info := make(chan map[string]kubernetes.PodStatus)
+	info := make(chan kubernetes.KubeStatus)
 	go w.Watch(context.Background(), info)
 	for {
-		podInfo := <-info
-		d, _ := yaml.Marshal(podInfo)
+		kubeInfo := <-info
+		d, _ := yaml.Marshal(kubeInfo)
 		fmt.Printf("%s\n", d)
 	}
 }

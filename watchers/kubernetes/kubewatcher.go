@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"os"
 	"time"
 
@@ -32,10 +33,23 @@ type KubeWatcher struct {
 }
 
 type PodStatus struct {
-	PodName   string
-	Namespace string
-	Status    string
-	Node      string
+	PodName   string `json:"podName"`
+	Namespace string `json:"namespace"`
+	Status    string `json:"status"`
+	Node      string `json:"node"`
+}
+
+type NodeStatus struct {
+	NodeName string   `json:"nodeName"`
+	Status   string   `json:"status"`
+	Ready    bool     `json:"ready"`
+	Version  string   `json:"version"`
+	Roles    []string `json:"roles"`
+}
+
+type KubeStatus struct {
+	Pods  map[string]PodStatus  `json:"pods"`
+	Nodes map[string]NodeStatus `json:"nodes"`
 }
 
 func NewKubeWatcher(configPath string, namespace string, log *slog.Logger) (*KubeWatcher, error) {
@@ -61,8 +75,8 @@ func NewKubeWatcher(configPath string, namespace string, log *slog.Logger) (*Kub
 	return w, nil
 }
 
-func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[string]PodStatus) {
-	w.log.Info("watching for pod changes", "namespace", w.namespace)
+func (w *KubeWatcher) Watch(controlContext context.Context, kubeChan chan<- KubeStatus) {
+	w.log.Info("watching for pod and node changes", "namespace", w.namespace)
 	connected := false
 	go func() {
 		for {
@@ -99,7 +113,10 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 			}
 			connected = true
 
-			status := make(map[string]PodStatus)
+			kubeStatus := KubeStatus{
+				Pods:  make(map[string]PodStatus),
+				Nodes: make(map[string]NodeStatus),
+			}
 			w.log.Info("connected to Kubernetes", "version", v.String())
 			opts := []informers.SharedInformerOption{
 				informers.WithTweakListOptions(func(opt *metav1.ListOptions) { opt.FieldSelector = fields.Everything().String() }),
@@ -110,46 +127,68 @@ func (w *KubeWatcher) Watch(controlContext context.Context, podChan chan<- map[s
 
 			factory := informers.NewSharedInformerFactoryWithOptions(w.clientSet, resyncDuration, opts...)
 
-			informer := factory.Core().V1().Pods().Informer()
+			sendStatus := func() {
+				// Create a deep copy to avoid concurrent map access
+				statusCopy := KubeStatus{
+					Pods:  maps.Clone(kubeStatus.Pods),
+					Nodes: maps.Clone(kubeStatus.Nodes),
+				}
+				kubeChan <- statusCopy
+			}
 
-			informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			// Pod informer
+			podInformer := factory.Core().V1().Pods().Informer()
+			podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
 					pod := obj.(*corev1.Pod)
 					p := podToStatus(pod)
 					w.log.Debug("pod added", "name", p.PodName, "node", p.Node, "status", p.Status)
-					status[p.PodName] = p
-					// Create a deep copy to avoid concurrent map access
-					statusCopy := make(map[string]PodStatus, len(status))
-					for key, value := range status {
-						statusCopy[key] = value
-					}
-					podChan <- statusCopy
+					kubeStatus.Pods[p.PodName] = p
+					sendStatus()
 				},
 				UpdateFunc: func(oldObj, newObj interface{}) {
 					pod := newObj.(*corev1.Pod)
 					p := podToStatus(pod)
-					if o, ok := status[p.PodName]; !ok || o.Status != p.Status || o.Node != p.Node {
+					if o, ok := kubeStatus.Pods[p.PodName]; !ok || o.Status != p.Status || o.Node != p.Node {
 						w.log.Debug("pod updated", "name", p.PodName, "node", p.Node, "status", p.Status)
-						status[p.PodName] = p
-						// Create a deep copy to avoid concurrent map access
-						statusCopy := make(map[string]PodStatus, len(status))
-						for key, value := range status {
-							statusCopy[key] = value
-						}
-						podChan <- statusCopy
+						kubeStatus.Pods[p.PodName] = p
+						sendStatus()
 					}
 				},
 				DeleteFunc: func(obj interface{}) {
 					pod := obj.(*corev1.Pod)
 					p := podToStatus(pod)
 					w.log.Debug("pod deleted", "name", p.PodName, "node", p.Node, "status", p.Status)
-					delete(status, p.PodName)
-					// Create a deep copy to avoid concurrent map access
-					statusCopy := make(map[string]PodStatus, len(status))
-					for key, value := range status {
-						statusCopy[key] = value
+					delete(kubeStatus.Pods, p.PodName)
+					sendStatus()
+				},
+			})
+
+			// Node informer
+			nodeInformer := factory.Core().V1().Nodes().Informer()
+			nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					node := obj.(*corev1.Node)
+					n := nodeToStatus(node)
+					w.log.Debug("node added", "name", n.NodeName, "status", n.Status, "ready", n.Ready)
+					kubeStatus.Nodes[n.NodeName] = n
+					sendStatus()
+				},
+				UpdateFunc: func(oldObj, newObj interface{}) {
+					node := newObj.(*corev1.Node)
+					n := nodeToStatus(node)
+					if o, ok := kubeStatus.Nodes[n.NodeName]; !ok || o.Status != n.Status || o.Ready != n.Ready {
+						w.log.Debug("node updated", "name", n.NodeName, "status", n.Status, "ready", n.Ready)
+						kubeStatus.Nodes[n.NodeName] = n
+						sendStatus()
 					}
-					podChan <- statusCopy
+				},
+				DeleteFunc: func(obj interface{}) {
+					node := obj.(*corev1.Node)
+					n := nodeToStatus(node)
+					w.log.Debug("node deleted", "name", n.NodeName, "status", n.Status, "ready", n.Ready)
+					delete(kubeStatus.Nodes, n.NodeName)
+					sendStatus()
 				},
 			})
 
@@ -171,6 +210,51 @@ func podToStatus(pod *corev1.Pod) PodStatus {
 		Namespace: pod.GetNamespace(),
 		Status:    string(pod.Status.Phase),
 		Node:      pod.Spec.NodeName,
+	}
+}
+
+func nodeToStatus(node *corev1.Node) NodeStatus {
+	// Determine if node is ready
+	ready := false
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+			ready = true
+			break
+		}
+	}
+
+	// Extract node roles from labels
+	roles := []string{}
+	for label := range node.Labels {
+		if label == "node-role.kubernetes.io/master" || label == "node-role.kubernetes.io/control-plane" {
+			roles = append(roles, "control-plane")
+		} else if label == "node-role.kubernetes.io/worker" {
+			roles = append(roles, "worker")
+		}
+	}
+	if len(roles) == 0 {
+		roles = append(roles, "worker") // Default to worker if no role labels
+	}
+
+	// Get overall node status
+	status := "Unknown"
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady {
+			if condition.Status == corev1.ConditionTrue {
+				status = "Ready"
+			} else {
+				status = "NotReady"
+			}
+			break
+		}
+	}
+
+	return NodeStatus{
+		NodeName: node.GetName(),
+		Status:   status,
+		Ready:    ready,
+		Version:  node.Status.NodeInfo.KubeletVersion,
+		Roles:    roles,
 	}
 }
 
